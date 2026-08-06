@@ -1,0 +1,208 @@
+import prisma from "./db.server";
+import { DEFAULT_CARE_STAGES, nextStage, isTerminal } from "./care-stages";
+
+// ---- Merchant profile / branding ----------------------------------------
+
+export async function getOrCreateMerchantProfile(shop) {
+    let profile = await prisma.merchantProfile.findUnique({ where: { shop } });
+    if (!profile) {
+          profile = await prisma.merchantProfile.create({ data: { shop } });
+    }
+    return profile;
+}
+
+export async function updateMerchantProfile(shop, data) {
+    return prisma.merchantProfile.update({
+          where: { shop },
+          data,
+    });
+}
+
+// ---- Service catalogue ----------------------------------------------------
+
+export async function listCatalogue(merchantId) {
+    return prisma.serviceCatalogueItem.findMany({
+          where: { merchantId },
+          orderBy: { position: "asc" },
+    });
+}
+
+export async function createCatalogueItem(merchantId, data) {
+    const count = await prisma.serviceCatalogueItem.count({ where: { merchantId } });
+    return prisma.serviceCatalogueItem.create({
+          data: { ...data, merchantId, position: count },
+    });
+}
+
+export async function updateCatalogueItem(id, data) {
+    return prisma.serviceCatalogueItem.update({ where: { id }, data });
+}
+
+export async function deleteCatalogueItem(id) {
+    return prisma.serviceCatalogueItem.update({
+          where: { id },
+          data: { active: false },
+    });
+}
+
+// ---- Care cases -------------------------------------------------------
+
+export async function createCareCase(merchantId, input) {
+    const careCase = await prisma.careCase.create({
+          data: {
+                  merchantId,
+                  shopifyOrderId: input.shopifyOrderId ?? null,
+                  shopifyOrderName: input.shopifyOrderName ?? null,
+                  shopifyProductId: input.shopifyProductId ?? null,
+                  productTitle: input.productTitle ?? null,
+                  productImageUrl: input.productImageUrl ?? null,
+                  customerName: input.customerName,
+                  customerEmail: input.customerEmail,
+                  catalogueItemId: input.catalogueItemId ?? null,
+                  serviceName: input.serviceName,
+                  issueDescription: input.issueDescription ?? null,
+                  photos: input.photos ? JSON.stringify(input.photos) : null,
+                  videos: input.videos ? JSON.stringify(input.videos) : null,
+                  status: "request_received",
+          },
+    });
+
+  await prisma.careUpdate.create({
+        data: {
+                caseId: careCase.id,
+                status: "request_received",
+                note: "Request received.",
+                visibleToCustomer: true,
+        },
+  });
+
+  return careCase;
+}
+
+export async function getCaseByToken(token) {
+    return prisma.careCase.findUnique({
+          where: { token },
+          include: {
+                  updates: { orderBy: { createdAt: "asc" } },
+                  catalogueItem: true,
+                  merchant: true,
+          },
+    });
+}
+
+export async function getCaseById(id, merchantId) {
+    return prisma.careCase.findFirst({
+          where: { id, merchantId },
+          include: {
+                  updates: { orderBy: { createdAt: "asc" } },
+                  catalogueItem: true,
+          },
+    });
+}
+
+export async function listCasesForMerchant(merchantId, { statusIn } = {}) {
+    return prisma.careCase.findMany({
+          where: {
+                  merchantId,
+                  ...(statusIn ? { status: { in: statusIn } } : {}),
+          },
+          orderBy: { updatedAt: "desc" },
+          include: { catalogueItem: true },
+    });
+}
+
+// Advance a case to the next default stage, or to an explicit status
+// (e.g. "declined"). Optionally attaches a note/media and flags whether
+// the customer should be notified - caller wires the actual email send.
+export async function advanceCase(caseId, { status, note, media, notifyCustomer = true } = {}) {
+    const current = await prisma.careCase.findUnique({ where: { id: caseId } });
+    if (!current) throw new Error("Case not found");
+
+  const targetStatus = status ?? nextStage(current.status)?.key;
+    if (!targetStatus) throw new Error("Already at the final stage");
+
+  const data = { status: targetStatus };
+    if (targetStatus === "completed") data.completedAt = new Date();
+    if (targetStatus === "quote_sent") data.quoteSentAt = new Date();
+    if (targetStatus === "approved") data.quoteApprovedAt = new Date();
+    if (targetStatus === "declined") data.quoteDeclinedAt = new Date();
+
+  const updated = await prisma.careCase.update({ where: { id: caseId }, data });
+
+  const update = await prisma.careUpdate.create({
+        data: {
+                caseId,
+                status: targetStatus,
+                note: note ?? null,
+                media: media ? JSON.stringify(media) : null,
+                visibleToCustomer: true,
+                customerNotified: notifyCustomer,
+        },
+  });
+
+  return { case: updated, update };
+}
+
+export async function addInternalNote(caseId, note) {
+    return prisma.careUpdate.create({
+          data: { caseId, note, visibleToCustomer: false, customerNotified: false },
+    });
+}
+
+// ---- Quote builder ---------------------------------------------------
+
+export async function setQuote(caseId, { labourCost = 0, partsCost = 0, shippingCost = 0, tax = 0, note, currency = "GBP" }) {
+    const total = Number(labourCost) + Number(partsCost) + Number(shippingCost) + Number(tax);
+    const updated = await prisma.careCase.update({
+          where: { id: caseId },
+          data: {
+                  quoteLabourCost: Number(labourCost),
+                  quotePartsCost: Number(partsCost),
+                  quoteShippingCost: Number(shippingCost),
+                  quoteTax: Number(tax),
+                  quoteTotal: total,
+                  quoteCurrency: currency,
+                  quoteNote: note ?? null,
+          },
+    });
+    return updated;
+}
+
+export async function sendQuote(caseId) {
+    return advanceCase(caseId, {
+          status: "quote_sent",
+          note: "Quote sent to customer.",
+          notifyCustomer: true,
+    });
+}
+
+export async function approveQuote(caseId) {
+    const updated = await advanceCase(caseId, {
+          status: "approved",
+          note: "Customer approved the quote.",
+          notifyCustomer: true,
+    });
+    await prisma.careCase.update({ where: { id: caseId }, data: { paymentStatus: "unpaid" } });
+    return updated;
+}
+
+export async function declineQuote(caseId) {
+    return advanceCase(caseId, {
+          status: "declined",
+          note: "Customer declined the quote.",
+          notifyCustomer: true,
+    });
+}
+
+export async function markPaid(caseId, shopifyOrderIdForPayment) {
+    return prisma.careCase.update({
+          where: { id: caseId },
+          data: { paymentStatus: "paid", shopifyOrderIdForPayment },
+    });
+}
+
+export function caseIsAtFinalStage(careCase) {
+    return isTerminal(careCase.status);
+}
+
+export const STAGES = DEFAULT_CARE_STAGES;
