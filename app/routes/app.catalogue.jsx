@@ -119,4 +119,3 @@ export default function Catalogue() {
 export const headers = (headersArgs) => {
     return boundary.headers(headersArgs);
 };
-</s-section>
