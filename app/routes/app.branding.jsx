@@ -57,4 +57,3 @@ export default function Branding() {
 export const headers = (headersArgs) => {
     return boundary.headers(headersArgs);
 };
-</s-section>
