@@ -136,4 +136,3 @@ export default function Index() {
 export const headers = (headersArgs) => {
     return boundary.headers(headersArgs);
 };
-</s-page>·
