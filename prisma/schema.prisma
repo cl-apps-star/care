@@ -1,0 +1,130 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Set to Postgres to match Railway (same pattern as Reveal / In the
+// Making) - reads DATABASE_URL from the environment, so nothing here
+// needs to change between local and production.
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+model MerchantProfile {
+  id          String   @id @default(cuid())
+  shop        String   @unique
+  brandName   String?
+  logoUrl     String?
+  primaryColor String? @default("#1a1a1a")
+  accentColor  String? @default("#8a7758")
+  supportEmail String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  catalogueItems ServiceCatalogueItem[]
+  cases          CareCase[]
+}
+
+model ServiceCatalogueItem {
+  id            String   @id @default(cuid())
+  merchant      MerchantProfile @relation(fields: [merchantId], references: [id])
+  merchantId    String
+  name          String
+  description   String?
+  pricingType   String
+  price         Float?
+  currency      String   @default("GBP")
+  requiresPhoto Boolean  @default(true)
+  productTypes  String?
+  active        Boolean  @default(true)
+  position      Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  cases CareCase[]
+}
+
+model CareCase {
+  id                String   @id @default(cuid())
+  token             String   @unique @default(cuid())
+  merchant          MerchantProfile @relation(fields: [merchantId], references: [id])
+  merchantId        String
+
+  shopifyOrderId    String?
+  shopifyOrderName  String?
+  shopifyProductId  String?
+  productTitle      String?
+  productImageUrl   String?
+
+  customerName      String
+  customerEmail     String
+
+  catalogueItem     ServiceCatalogueItem? @relation(fields: [catalogueItemId], references: [id])
+  catalogueItemId   String?
+  serviceName       String
+
+  issueDescription  String?
+  photos            String?
+  videos            String?
+
+  status            String   @default("request_received")
+
+  quoteLabourCost   Float?
+  quotePartsCost    Float?
+  quoteShippingCost Float?
+  quoteTax          Float?
+  quoteTotal        Float?
+  quoteCurrency     String?  @default("GBP")
+  quoteNote         String?
+  quoteSentAt       DateTime?
+  quoteApprovedAt   DateTime?
+  quoteDeclinedAt   DateTime?
+
+  paymentStatus     String   @default("unpaid")
+  shopifyOrderIdForPayment String?
+
+  warrantyClaim     Boolean  @default(false)
+
+  nextServiceDueAt  DateTime?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  completedAt       DateTime?
+
+  updates CareUpdate[]
+}
+
+model CareUpdate {
+  id            String   @id @default(cuid())
+  case          CareCase @relation(fields: [caseId], references: [id])
+  caseId        String
+  status        String?
+  note          String?
+  media         String?
+  visibleToCustomer Boolean @default(true)
+  customerNotified  Boolean @default(false)
+  createdAt     DateTime @default(now())
+}
