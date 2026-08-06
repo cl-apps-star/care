@@ -14,6 +14,7 @@ export const DEFAULT_CARE_STAGES = [
   { key: "ready_to_return", label: "Ready to return" },
   { key: "completed", label: "Completed" },
   ];
+export const STAGES = DEFAULT_CARE_STAGES;
 
 // Terminal / negative status, reachable from quote_sent if the customer
 // declines rather than approves.
