@@ -46,4 +46,3 @@ export default function Auth() {
         </AppProvider>
       );
 }
-</s-page>
