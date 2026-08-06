@@ -171,4 +171,3 @@ export default function CaseDetail() {
 export const headers = (headersArgs) => {
     return boundary.headers(headersArgs);
 };
-</s-section>
