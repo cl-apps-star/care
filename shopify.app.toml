@@ -1,0 +1,42 @@
+# This file stores configurations for your Shopify app.
+# client_id from the "care" app registered in the CL Apps Partner org's
+# Dev Dashboard (created 2026-08-06) - same as Reveal and In the Making.
+name = "care"
+client_id = "3b0fcb692c2bf77d85ec396411fe6673"
+
+[access_scopes]
+# read_orders/read_products so a case can show order + product context.
+# No write scopes needed yet - payment goes through a Shopify draft order
+# created via the Billing/Orders API when quote approval is wired up.
+scopes = "read_products,read_orders"
+
+[webhooks]
+api_version = "2025-10"
+
+  # Handled by: /app/routes/webhooks.app.uninstalled.jsx
+    [[webhooks.subscriptions]]
+      uri = "/webhooks/app/uninstalled"
+        topics = ["app/uninstalled"]
+
+          # Handled by: /app/routes/webhooks.app.scopes_update.jsx
+            [[webhooks.subscriptions]]
+              topics = [ "app/scopes_update" ]
+                uri = "/webhooks/app/scopes_update"
+
+                  # Mandatory compliance topics - required for Shopify App Store approval
+                    # on any public app that touches customer data.
+                      # Handled by: /app/routes/webhooks.customers.data_request.jsx
+                        [[webhooks.subscriptions]]
+                          uri = "/webhooks/customers/data_request"
+                            compliance_topics = ["customers/data_request"]
+
+                              # Handled by: /app/routes/webhooks.customers.redact.jsx
+                                [[webhooks.subscriptions]]
+                                  uri = "/webhooks/customers/redact"
+                                    compliance_topics = ["customers/redact"]
+
+                                      # Handled by: /app/routes/webhooks.shop.redact.jsx
+                                        [[webhooks.subscriptions]]
+                                          uri = "/webhooks/shop/redact"
+                                            compliance_topics = ["shop/redact"]
+                                            
