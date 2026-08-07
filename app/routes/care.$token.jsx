@@ -112,7 +112,9 @@ export default function CareTrackingPage() {
       )}
 
       {careCase.status === "declined" && (
-        <p style={{ marginTop: 32 }}>This request was declined. Contact us if you'd like to revisit it.</p>
+        <p style={{ marginTop: 32 }}>
+          This request was declined. Reach out to us any time if you'd like to revisit it.
+        </p>
       )}
 
       <div style={{ marginTop: 48 }}>
