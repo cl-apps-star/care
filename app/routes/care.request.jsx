@@ -67,6 +67,7 @@ export const action = async ({ request }) => {
     let shopifyOrderName = orderNumber ? (orderNumber.startsWith("#") ? orderNumber : `#${orderNumber}`) : null;
     let shopifyProductId = null;
     let productTitle = String(formData.get("productTitle") || "").trim() || null;
+    let productImageUrl = null;
 
     const lineItemsJson = formData.get("lineItemsJson");
     const selectedIndex = formData.get("selectedLineItem");
@@ -77,6 +78,7 @@ export const action = async ({ request }) => {
         if (chosen) {
           productTitle = chosen.title;
           shopifyProductId = chosen.shopifyProductId;
+          productImageUrl = chosen.imageUrl || null;
         }
       } catch {
         // fall through to manually-entered productTitle
@@ -99,6 +101,7 @@ export const action = async ({ request }) => {
       shopifyOrderName,
       shopifyProductId,
       productTitle,
+      productImageUrl,
       catalogueItemId,
       serviceName,
       issueDescription,
@@ -118,44 +121,84 @@ export const action = async ({ request }) => {
 function Shell({ brand, children }) {
   const accent = brand?.accentColor || "#8a7758";
   return (
-    <div
-      style={{
-        fontFamily: "Georgia, 'Times New Roman', serif",
-        maxWidth: 640,
-        margin: "0 auto",
-        padding: "48px 24px",
-        color: "#1a1a1a",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 13,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: accent,
-          marginBottom: 24,
-        }}
-      >
-        {brand?.brandName || "Care"}
+    <div style={{ "--accent": accent }}>
+      <style>{`
+        .care-req-wrap {
+          font-family: Georgia, 'Times New Roman', serif;
+          max-width: 480px;
+          margin: 0 auto;
+          padding: 64px 24px 64px;
+          color: #232320;
+          background: #fffdfa;
+        }
+        .care-req-eyebrow {
+          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+          font-size: 11px;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          color: var(--accent);
+          text-align: center;
+          margin-bottom: 22px;
+        }
+        .care-req-wrap h1 { font-weight: normal; font-size: 24px; text-align: center; margin: 0 0 10px; }
+        .care-req-wrap > p.care-req-intro {
+          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+          color: #7d7a72; font-size: 13.5px; line-height: 1.6;
+          text-align: center; margin: 0 0 40px;
+        }
+        .care-field { display: block; margin-bottom: 22px; }
+        .care-field-label {
+          display: block;
+          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+          font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+          color: #a39d90; margin-bottom: 8px;
+        }
+        .care-field input, .care-field select, .care-field textarea {
+          display: block; width: 100%; box-sizing: border-box;
+          font-family: Georgia, 'Times New Roman', serif;
+          font-size: 15px; color: #232320;
+          padding: 10px 2px; border: none; border-bottom: 1px solid #e4e0d8;
+          background: transparent;
+        }
+        .care-field input:focus, .care-field select:focus, .care-field textarea:focus {
+          outline: none; border-bottom-color: var(--accent);
+        }
+        .care-field textarea { min-height: 96px; font-family: Georgia, 'Times New Roman', serif; resize: vertical; }
+        .care-req-note {
+          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+          font-size: 12.5px; color: #7d7a72; margin: -12px 0 22px;
+        }
+        .care-req-error {
+          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+          font-size: 13px; color: #a4463a; margin: -6px 0 20px;
+        }
+        .care-req-btn {
+          display: block; width: 100%; box-sizing: border-box;
+          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+          font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase;
+          padding: 14px 22px; border: 1px solid var(--accent);
+          color: #fff; background: var(--accent); text-align: center;
+          cursor: pointer; margin-top: 10px;
+        }
+        .care-req-btn:disabled { opacity: 0.6; cursor: default; }
+        .care-req-link {
+          display: inline-block; margin-top: 18px;
+          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+          font-size: 12.5px; color: var(--accent); text-decoration: none;
+          border-bottom: 1px solid var(--accent); padding-bottom: 1px;
+        }
+        .care-req-found {
+          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+          font-size: 12.5px; color: #7d7a72; margin: -8px 0 22px;
+        }
+      `}</style>
+      <div className="care-req-wrap">
+        <div className="care-req-eyebrow">{brand?.brandName || "Care"}</div>
+        {children}
       </div>
-      {children}
     </div>
   );
 }
-
-const fieldStyle = {
-  display: "block",
-  width: "100%",
-  padding: "10px 12px",
-  fontSize: 15,
-  fontFamily: "inherit",
-  border: "1px solid #ccc",
-  marginTop: 6,
-  marginBottom: 18,
-  boxSizing: "border-box",
-};
-
-const labelStyle = { display: "block", fontSize: 14, fontWeight: "bold" };
 
 export default function CareRequestPage() {
   const data = useLoaderData();
@@ -166,8 +209,8 @@ export default function CareRequestPage() {
   if (data.error === "missing_shop") {
     return (
       <Shell brand={null}>
-        <h1 style={{ fontWeight: "normal" }}>This link is missing some information</h1>
-        <p>Please use the exact link your retailer shared with you, or contact them directly.</p>
+        <h1>This link is missing some information</h1>
+        <p className="care-req-intro">Please use the exact link your retailer shared with you, or contact them directly.</p>
       </Shell>
     );
   }
@@ -175,27 +218,28 @@ export default function CareRequestPage() {
   if (data.error === "not_found") {
     return (
       <Shell brand={null}>
-        <h1 style={{ fontWeight: "normal" }}>We couldn't find this page</h1>
-        <p>Please double-check the link, or contact the retailer directly.</p>
+        <h1>We couldn't find this page</h1>
+        <p className="care-req-intro">Please double-check the link, or contact the retailer directly.</p>
       </Shell>
     );
   }
 
   const { merchant, catalogue, shop } = data;
   const actionUrl = `/care/request?shop=${encodeURIComponent(shop)}`;
-  const accent = merchant.accentColor || "#8a7758";
 
   if (actionData?.step === "done") {
     return (
       <Shell brand={merchant}>
-        <h1 style={{ fontWeight: "normal" }}>Thanks — we've got your request</h1>
-        <p>
+        <h1>Thanks — we've got your request</h1>
+        <p className="care-req-intro">
           We've sent a confirmation to <strong>{actionData.customerEmail}</strong> with a link to
           track progress. We'll be in touch with next steps shortly.
         </p>
-        <a href={actionData.trackingUrl} style={{ color: accent }}>
-          Track your request now
-        </a>
+        <div style={{ textAlign: "center" }}>
+          <a href={actionData.trackingUrl} className="care-req-link">
+            Track your request now →
+          </a>
+        </div>
       </Shell>
     );
   }
@@ -207,8 +251,8 @@ export default function CareRequestPage() {
 
   return (
     <Shell brand={merchant}>
-      <h1 style={{ fontWeight: "normal" }}>Request a repair or return</h1>
-      <p style={{ color: "#555" }}>
+      <h1>Request a repair or return</h1>
+      <p className="care-req-intro">
         Tell us a little about your piece and what's going on — we'll follow up with a quote and
         next steps.
       </p>
@@ -216,30 +260,19 @@ export default function CareRequestPage() {
       {!showDetails && (
         <Form method="post" action={actionUrl}>
           <input type="hidden" name="intent" value="lookup_order" />
-          <label style={labelStyle}>
-            Order number
-            <input style={fieldStyle} name="orderNumber" placeholder="e.g. 1003" />
+          <label className="care-field">
+            <span className="care-field-label">Order number</span>
+            <input name="orderNumber" placeholder="e.g. 1003" />
           </label>
-          <label style={labelStyle}>
-            Email used at checkout
-            <input style={fieldStyle} type="email" name="email" required />
+          <label className="care-field">
+            <span className="care-field-label">Email used at checkout</span>
+            <input type="email" name="email" required />
           </label>
-          <p style={{ fontSize: 13, color: "#777", marginTop: -10 }}>
+          <p className="care-req-note">
             Don't have your order number handy? Leave it blank and continue — you'll be able to
             describe your item instead.
           </p>
-          <button
-            type="submit"
-            disabled={submitting}
-            style={{
-              padding: "12px 24px",
-              background: accent,
-              color: "#fff",
-              border: "none",
-              fontSize: 14,
-              cursor: "pointer",
-            }}
-          >
+          <button type="submit" className="care-req-btn" disabled={submitting}>
             {submitting ? "Looking up your order…" : "Continue"}
           </button>
         </Form>
@@ -257,13 +290,11 @@ export default function CareRequestPage() {
               <input type="hidden" name="shopifyOrderId" value={lookup.shopifyOrderId} />
               <input type="hidden" name="shopifyOrderName" value={lookup.shopifyOrderName} />
               <input type="hidden" name="lineItemsJson" value={JSON.stringify(lookup.lineItems)} />
-              <p style={{ fontSize: 13, color: "#777" }}>
-                Found order {lookup.shopifyOrderName}.
-              </p>
+              <p className="care-req-found">Found order {lookup.shopifyOrderName}.</p>
               {lookup.lineItems.length > 1 ? (
-                <label style={labelStyle}>
-                  Which item is this about?
-                  <select style={fieldStyle} name="selectedLineItem" defaultValue="0">
+                <label className="care-field">
+                  <span className="care-field-label">Which item is this about?</span>
+                  <select name="selectedLineItem" defaultValue="0">
                     {lookup.lineItems.map((li, i) => (
                       <option key={i} value={i}>
                         {li.title}
@@ -278,26 +309,26 @@ export default function CareRequestPage() {
           ) : (
             <>
               {lookup?.reason === "not_found" || lookup?.reason === "email_mismatch" ? (
-                <p style={{ fontSize: 13, color: "#777" }}>
+                <p className="care-req-found">
                   We couldn't match that to an order — no problem, just tell us about your item
                   below.
                 </p>
               ) : null}
-              <label style={labelStyle}>
-                What's the item?
-                <input style={fieldStyle} name="productTitle" placeholder="e.g. Gold signet ring" required />
+              <label className="care-field">
+                <span className="care-field-label">What's the item?</span>
+                <input name="productTitle" placeholder="e.g. Gold signet ring" required />
               </label>
             </>
           )}
 
-          <label style={labelStyle}>
-            Your name
-            <input style={fieldStyle} name="name" required />
+          <label className="care-field">
+            <span className="care-field-label">Your name</span>
+            <input name="name" required />
           </label>
 
-          <label style={labelStyle}>
-            What service do you need?
-            <select style={fieldStyle} name="catalogueItemId" defaultValue="">
+          <label className="care-field">
+            <span className="care-field-label">What service do you need?</span>
+            <select name="catalogueItemId" defaultValue="">
               <option value="">Not sure — let us take a look</option>
               {catalogue.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -307,38 +338,25 @@ export default function CareRequestPage() {
             </select>
           </label>
           {catalogue.length === 0 && (
-            <p style={{ fontSize: 13, color: "#777", marginTop: -10 }}>
+            <p className="care-req-note">
               This retailer hasn't listed specific services yet — that's fine, just describe what
               you need below.
             </p>
           )}
 
-          <label style={labelStyle}>
-            Describe the issue
-            <textarea style={{ ...fieldStyle, minHeight: 100 }} name="issueDescription" required />
+          <label className="care-field">
+            <span className="care-field-label">Describe the issue</span>
+            <textarea name="issueDescription" required />
           </label>
 
-          <label style={labelStyle}>
-            Add a photo (optional)
-            <input style={fieldStyle} type="file" name="photo" accept="image/*" />
+          <label className="care-field">
+            <span className="care-field-label">Add a photo (optional)</span>
+            <input type="file" name="photo" accept="image/*" />
           </label>
 
-          {actionData?.formError && (
-            <p style={{ color: "#b3261e", fontSize: 14 }}>{actionData.formError}</p>
-          )}
+          {actionData?.formError && <p className="care-req-error">{actionData.formError}</p>}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            style={{
-              padding: "12px 24px",
-              background: accent,
-              color: "#fff",
-              border: "none",
-              fontSize: 14,
-              cursor: "pointer",
-            }}
-          >
+          <button type="submit" className="care-req-btn" disabled={submitting}>
             {submitting ? "Sending…" : "Submit request"}
           </button>
         </Form>
