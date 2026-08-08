@@ -1,5 +1,6 @@
 import prisma from "./db.server";
 import { DEFAULT_CARE_STAGES, nextStage, isTerminal } from "./care-stages";
+import { createDraftOrderForQuote } from "./care-payment.server";
 
 // ---- Merchant profile / branding ----------------------------------------
 
@@ -199,6 +200,26 @@ export async function markPaid(caseId, shopifyOrderIdForPayment) {
           where: { id: caseId },
           data: { paymentStatus: "paid", shopifyOrderIdForPayment },
     });
+}
+
+// Called right after approveQuote() — creates the real, payable Shopify
+// draft order for the case's quote and stores its invoice link so the
+// customer tracking page can show a working "Pay now" button. Separate
+// from markPaid(), which only fires later once the customer actually
+// completes payment (see app/routes/webhooks.orders.create.jsx).
+export async function createPayableOrderForCase(caseId, shop) {
+    const careCase = await prisma.careCase.findUnique({ where: { id: caseId } });
+    if (!careCase) throw new Error("Case not found");
+
+  const { draftOrderId, invoiceUrl } = await createDraftOrderForQuote(careCase, shop);
+
+  return prisma.careCase.update({
+        where: { id: caseId },
+        data: {
+                shopifyDraftOrderId: draftOrderId,
+                shopifyInvoiceUrl: invoiceUrl,
+        },
+  });
 }
 
 export function caseIsAtFinalStage(careCase) {

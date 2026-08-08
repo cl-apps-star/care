@@ -1,6 +1,6 @@
 import { useFetcher, useLoaderData } from "react-router";
 import prisma from "../db.server";
-import { getCaseByToken, approveQuote, declineQuote } from "../care.server";
+import { getCaseByToken, approveQuote, declineQuote, createPayableOrderForCase } from "../care.server";
 import { stageLabel } from "../care-stages";
 import { sendStageUpdateEmail } from "../email.server";
 
@@ -23,8 +23,29 @@ export const action = async ({ request, params }) => {
   if (intent === "approve_quote" && careCase.status === "quote_sent") {
     const { case: updated } = await approveQuote(careCase.id);
     const merchant = await prisma.merchantProfile.findUnique({ where: { id: updated.merchantId } });
-    await sendStageUpdateEmail({ careCase: updated, merchant, trackingUrl, note: "Thanks — we'll get started." });
-    return { ok: true };
+
+    // Turn the approved quote into a real, payable Shopify draft order.
+    // If this fails (network blip, Shopify API hiccup), the quote is
+    // still approved — the merchant can see it in the dashboard and
+    // retry or take payment another way. A payment-link failure should
+    // never silently block the approval itself.
+    let invoiceUrl = null;
+    try {
+      const withOrder = await createPayableOrderForCase(updated.id, merchant.shop);
+      invoiceUrl = withOrder.shopifyInvoiceUrl;
+    } catch (err) {
+      console.error(`[CARE] Failed to create draft order for case ${updated.id}:`, err);
+    }
+
+    await sendStageUpdateEmail({
+      careCase: updated,
+      merchant,
+      trackingUrl,
+      note: invoiceUrl
+        ? "Thanks — we'll get started. You can complete payment any time from your tracking page."
+        : "Thanks — we'll get started.",
+    });
+    return { ok: true, invoiceUrl };
   }
 
   if (intent === "decline_quote" && careCase.status === "quote_sent") {
@@ -116,6 +137,15 @@ export default function CareTrackingPage() {
           background: transparent; color: #7d7a72; border-color: #d9d4c9;
         }
         .care-btn:disabled { opacity: 0.6; cursor: default; }
+        .care-pay {
+          display: block; text-align: center; text-decoration: none;
+          box-sizing: border-box;
+          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+          font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase;
+          padding: 13px 18px; border: 1px solid var(--accent);
+          color: #fff; background: var(--accent);
+          margin-bottom: 32px;
+        }
         .care-declined {
           font-size: 14px; line-height: 1.7; color: #565349;
           background: #faf8f4; border: 1px solid #e4e0d8;
@@ -191,6 +221,17 @@ export default function CareTrackingPage() {
             </div>
           </div>
         )}
+
+        {careCase.status === "approved" &&
+          careCase.shopifyInvoiceUrl &&
+          careCase.paymentStatus !== "paid" && (
+            <a href={careCase.shopifyInvoiceUrl} className="care-pay">
+              Pay for your repair
+              {careCase.quoteTotal != null
+                ? ` — ${careCase.quoteCurrency || "GBP"} ${careCase.quoteTotal.toFixed(2)}`
+                : ""}
+            </a>
+          )}
 
         {careCase.status === "declined" && (
           <div className="care-declined">

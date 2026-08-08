@@ -6,9 +6,9 @@ client_id = "3b0fcb692c2bf77d85ec396411fe6673"
 
 [access_scopes]
 # read_orders/read_products so a case can show order + product context.
-# No write scopes needed yet - payment goes through a Shopify draft order
-# created via the Billing/Orders API when quote approval is wired up.
-scopes = "read_products,read_orders"
+# write_draft_orders added so an approved quote can become a real,
+# payable Shopify draft order (see app/care-payment.server.js).
+scopes = "read_products,read_orders,write_draft_orders"
 
 [webhooks]
 api_version = "2025-10"
@@ -39,4 +39,11 @@ api_version = "2025-10"
                                         [[webhooks.subscriptions]]
                                           uri = "/webhooks/shop/redact"
                                             compliance_topics = ["shop/redact"]
-                                            
+
+  # New: catches a draft order converting to a real order once a customer
+  # pays for an approved repair quote (see app/routes/webhooks.orders.create.jsx).
+  # Handled by: /app/routes/webhooks.orders.create.jsx
+    [[webhooks.subscriptions]]
+      uri = "/webhooks/orders/create"
+        topics = ["orders/create"]
+

@@ -105,6 +105,8 @@ model CareCase {
 
   paymentStatus     String   @default("unpaid")
   shopifyOrderIdForPayment String?
+  shopifyDraftOrderId String?
+  shopifyInvoiceUrl   String?
 
   warrantyClaim     Boolean  @default(false)
 
