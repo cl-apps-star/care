@@ -3,6 +3,8 @@
 # Dev Dashboard (created 2026-08-06) - same as Reveal and In the Making.
 name = "care"
 client_id = "3b0fcb692c2bf77d85ec396411fe6673"
+application_url = "https://care-production-2b71.up.railway.app"
+embedded = true
 
 [access_scopes]
 # read_orders/read_products so a case can show order + product context.
@@ -40,10 +42,20 @@ api_version = "2025-10"
                                           uri = "/webhooks/shop/redact"
                                             compliance_topics = ["shop/redact"]
 
-  # New: catches a draft order converting to a real order once a customer
-  # pays for an approved repair quote (see app/routes/webhooks.orders.create.jsx).
-  # Handled by: /app/routes/webhooks.orders.create.jsx
-    [[webhooks.subscriptions]]
-      uri = "/webhooks/orders/create"
-        topics = ["orders/create"]
+  # orders/create webhook deliberately NOT registered yet — Shopify blocks
+  # deploying it until this app has approved "protected customer data"
+  # access (orders/create includes customer name/email/address). The
+  # handler already exists (app/routes/webhooks.orders.create.jsx) and is
+  # ready to register the moment that access is approved; see the request
+  # process at https://shopify.dev/docs/apps/launch/protected-customer-data.
+  # Until then, a merchant marks a case paid manually after checking the
+  # order in Shopify admin — the draft-order payment link itself works
+  # today regardless.
+
+[auth]
+# Token-exchange auth (matches shopify.server.js's authPathPrefix) means
+# this isn't actually used at runtime, but the CLI's config schema
+# requires the field to be present regardless — same as In the Making's
+# working config.
+redirect_urls = [ "https://care-production-2b71.up.railway.app/api/auth" ]
 
