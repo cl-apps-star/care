@@ -64,6 +64,7 @@ export const action = async ({ request }) => {
     }
 
     const catalogueItemId = formData.get("catalogueItemId")?.toString() || null;
+    const catalogue = catalogueItemId ? await listCatalogue(merchant.id) : [];
     const matchedService = catalogueItemId
       ? catalogue.find((item) => item.id === catalogueItemId)
       : null;
