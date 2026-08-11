@@ -19,6 +19,7 @@ export default function App() {
                         <s-link href="/app">Cases</s-link>
                         <s-link href="/app/catalogue">Service catalogue</s-link>
                         <s-link href="/app/branding">Branding</s-link>
+                        <s-link href="/app/billing">Billing</s-link>
                 </s-app-nav>
               <Outlet />
         </AppProvider>

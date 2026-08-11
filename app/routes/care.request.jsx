@@ -3,6 +3,7 @@ import prisma from "../db.server";
 import { listCatalogue, createCareCase } from "../care.server";
 import { sendCaseReceivedEmail } from "../email.server";
 import { findOrderForCustomer } from "../shopify-orders.server";
+import { checkAndIncrementCaseCount } from "../plan.server";
 
 // Public, unauthenticated route — the customer-facing way to actually start
 // a repair/return request. Linked from the merchant dashboard as
@@ -115,6 +116,25 @@ export const action = async ({ request }) => {
     if (photoFile && typeof photoFile === "object" && photoFile.size > 0) {
       const buffer = Buffer.from(await photoFile.arrayBuffer());
       photos = [`data:${photoFile.type};base64,${buffer.toString("base64")}`];
+    }
+
+    // Enforced here — at the moment a real case is actually created — not
+    // when the merchant sends an invite. A merchant can send as many
+    // invites as they like; only real submissions count toward the free
+    // plan's monthly allowance. Kept deliberately vague to the customer
+    // (no mention of billing/plans on a public-facing page); the merchant
+    // sees the real reason on their Billing page.
+    const limitCheck = await checkAndIncrementCaseCount(merchant.id);
+    if (!limitCheck.allowed) {
+      console.warn(`[CARE] Free plan limit reached for shop ${shop} — request blocked.`);
+      return {
+        step: "details",
+        lookup: JSON.parse(String(formData.get("lookupJson") || "{}")),
+        orderNumber,
+        email,
+        formError:
+          "We're not able to accept new requests online right now — please contact us directly and we'll help you out.",
+      };
     }
 
     const careCase = await createCareCase(merchant.id, {

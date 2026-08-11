@@ -42,6 +42,14 @@ api_version = "2025-10"
                                           uri = "/webhooks/shop/redact"
                                             compliance_topics = ["shop/redact"]
 
+  # Handled by: /app/routes/webhooks.app_subscriptions.update.jsx
+  # Keeps the stored plan (free/studio) in sync when a subscription changes
+  # on Shopify's side (cancel, decline, expire) rather than only through
+  # the in-app Billing page.
+    [[webhooks.subscriptions]]
+      uri = "/webhooks/app_subscriptions/update"
+        topics = ["app_subscriptions/update"]
+
   # orders/create webhook deliberately NOT registered yet — Shopify blocks
   # deploying it until this app has approved "protected customer data"
   # access (orders/create includes customer name/email/address). The

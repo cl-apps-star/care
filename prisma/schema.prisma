@@ -44,6 +44,17 @@ model MerchantProfile {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Billing — "free" | "studio". Same shape as the rest of the suite
+  // (Digital Unboxing's MakerProfile, In the Making's JourneyProfile):
+  // plan/planStatus/shopifyChargeId track the Shopify subscription itself;
+  // casePeriodCount/casePeriodStart track usage against the free plan's
+  // monthly allowance (see plan.server.js).
+  plan             String    @default("free")
+  planStatus       String?
+  shopifyChargeId  String?
+  casePeriodCount  Int       @default(0)
+  casePeriodStart  DateTime?
+
   catalogueItems ServiceCatalogueItem[]
   cases          CareCase[]
 }
