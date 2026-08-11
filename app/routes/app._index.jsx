@@ -79,7 +79,7 @@ export const action = async ({ request }) => {
       shopifyOrderName: (formData.get("shopifyOrderName") || "").toString().trim() || null,
       productTitle: (formData.get("productTitle") || "").toString().trim() || null,
       productImageUrl: (formData.get("productImageUrl") || "").toString().trim() || null,
-      catalogueItemId: catalogueItemId || null,
+      catalogueItemId: matchedService ? catalogueItemId : null,
       serviceName,
       issueDescription: (formData.get("issueDescription") || "").toString().trim() || null,
     });
