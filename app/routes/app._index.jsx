@@ -14,6 +14,7 @@ import {
   sendCaseReceivedEmail,
   sendStageUpdateEmail,
   sendReadyToReturnEmail,
+  sendCareRequestInviteEmail,
 } from "../email.server";
 import { getRecentCoaKits } from "../coa-lookup.server";
 
@@ -51,43 +52,41 @@ export const action = async ({ request }) => {
     return { ok: true };
   }
 
-  // Merchant-initiated case, either pre-filled from a recently-generated
-  // COA kit (see StartCaseSection below) or entered fully by hand when
-  // there's nothing to pick from — same handler either way, since the
-  // kit click only pre-fills form fields client-side before submit.
-  if (intent === "create_case") {
+  // Merchant identifies a customer — either picking a recently-generated
+  // COA kit, or typing in order/email by hand (see StartCaseSection below)
+  // — and Care sends THAT customer a branded invite email with a link to
+  // the public request form, pre-filled with what the merchant already
+  // knows. No CareCase is created here; the case is created for real when
+  // the customer actually submits the form themselves (care.request.jsx's
+  // submit_request action) — same as the fully organic/shared-link path.
+  if (intent === "send_request_email") {
     const customerName = (formData.get("customerName") || "").toString().trim();
     const customerEmail = (formData.get("customerEmail") || "").toString().trim();
 
-    if (!customerName || !customerEmail) {
-      return { ok: false, error: "Customer name and email are required." };
+    if (!customerEmail) {
+      return { ok: false, error: "Customer email is required." };
     }
 
-    const catalogueItemId = formData.get("catalogueItemId")?.toString() || null;
-    const catalogue = catalogueItemId ? await listCatalogue(merchant.id) : [];
-    const matchedService = catalogueItemId
-      ? catalogue.find((item) => item.id === catalogueItemId)
-      : null;
-    const serviceName =
-      matchedService?.name ||
-      (formData.get("serviceName") || "").toString().trim() ||
-      "Not sure — take a look";
+    const shopifyOrderName = (formData.get("shopifyOrderName") || "").toString().trim() || null;
+    const productTitle = (formData.get("productTitle") || "").toString().trim() || null;
 
-    const careCase = await createCareCase(merchant.id, {
+    const portalUrl = new URL("/care/request", appUrl);
+    portalUrl.searchParams.set("shop", session.shop);
+    portalUrl.searchParams.set("email", customerEmail);
+    if (shopifyOrderName) portalUrl.searchParams.set("order", shopifyOrderName.replace(/^#/, ""));
+    if (customerName) portalUrl.searchParams.set("name", customerName);
+    if (productTitle) portalUrl.searchParams.set("productTitle", productTitle);
+
+    await sendCareRequestInviteEmail({
+      merchant,
       customerName,
       customerEmail,
-      shopifyOrderName: (formData.get("shopifyOrderName") || "").toString().trim() || null,
-      productTitle: (formData.get("productTitle") || "").toString().trim() || null,
-      productImageUrl: (formData.get("productImageUrl") || "").toString().trim() || null,
-      catalogueItemId: matchedService ? catalogueItemId : null,
-      serviceName,
-      issueDescription: (formData.get("issueDescription") || "").toString().trim() || null,
+      orderName: shopifyOrderName,
+      productTitle,
+      portalUrl: portalUrl.toString(),
     });
 
-    const trackingUrl = `${appUrl}/care/${careCase.token}`;
-    await sendCaseReceivedEmail({ careCase, merchant, trackingUrl });
-
-    return { ok: true, intent: "create_case", caseId: careCase.id };
+    return { ok: true, intent: "send_request_email" };
   }
 
   if (intent === "advance") {
@@ -117,21 +116,28 @@ export const action = async ({ request }) => {
 // submit. When COA isn't installed or has zero kits yet, `recentKits` is
 // null and this collapses straight to the same form, blank — no error
 // state, no dead space either way.
-function StartCaseSection({ recentKits, catalogue }) {
+function StartCaseSection({ recentKits }) {
   const fetcher = useFetcher();
   const [selectedKit, setSelectedKit] = useState(null);
   const [showManual, setShowManual] = useState(!recentKits || recentKits.length === 0);
 
   const isBusy = fetcher.state !== "idle";
   const hasKits = Boolean(recentKits && recentKits.length > 0);
+  const justSent = fetcher.data?.ok && fetcher.data?.intent === "send_request_email";
 
   return (
     <s-section heading="Start a case">
+      {justSent && (
+        <s-banner tone="success">
+          Sent! We've emailed them a link to fill in the rest of the details themselves.
+        </s-banner>
+      )}
+
       {hasKits && !showManual && (
         <s-stack direction="block" gap="base">
           <s-paragraph>
-            Recently generated Digital Unboxing Kits — click one to start a care case for that
-            customer.
+            Recently generated Digital Unboxing Kits — pick one to email that customer a link to
+            request a repair, cleaning, or return.
           </s-paragraph>
           <s-stack direction="block" gap="tight">
             {recentKits.map((kit) => (
@@ -153,14 +159,14 @@ function StartCaseSection({ recentKits, catalogue }) {
                     </s-text>
                   </s-stack>
                   <s-button variant="secondary" onClick={() => setSelectedKit(kit)}>
-                    Start a care case
+                    Send them the form
                   </s-button>
                 </s-stack>
               </s-box>
             ))}
           </s-stack>
           <s-button variant="tertiary" onClick={() => setShowManual(true)}>
-            Or start a case manually
+            Or enter their details manually
           </s-button>
         </s-stack>
       )}
@@ -170,20 +176,20 @@ function StartCaseSection({ recentKits, catalogue }) {
           onSubmit={(e) => {
             e.preventDefault();
             const fd = new FormData(e.currentTarget);
-            fd.set("intent", "create_case");
+            fd.set("intent", "send_request_email");
             fetcher.submit(fd, { method: "POST" });
             setSelectedKit(null);
             setShowManual(!hasKits);
             e.currentTarget.reset();
           }}
         >
-          <input type="hidden" name="intent" value="create_case" />
+          <input type="hidden" name="intent" value="send_request_email" />
           <input type="hidden" name="shopifyOrderName" value={selectedKit?.orderName || ""} />
-          <input type="hidden" name="productImageUrl" value={selectedKit?.productImageUrl || ""} />
           <s-stack direction="block" gap="base">
             {selectedKit && (
               <s-banner tone="info">
-                Starting a case for {selectedKit.productTitle || "this piece"}
+                Sending to {selectedKit.customerName || "this customer"} about{" "}
+                {selectedKit.productTitle || "this piece"}
                 {selectedKit.orderName ? ` (${selectedKit.orderName})` : ""} —{" "}
                 <s-link onClick={() => setSelectedKit(null)}>change</s-link>
               </s-banner>
@@ -192,7 +198,6 @@ function StartCaseSection({ recentKits, catalogue }) {
               name="customerName"
               label="Customer name"
               defaultValue={selectedKit?.customerName || ""}
-              required
             />
             <s-text-field
               name="customerEmail"
@@ -210,22 +215,13 @@ function StartCaseSection({ recentKits, catalogue }) {
             {selectedKit && (
               <s-text-field name="productTitle" label="Item" defaultValue={selectedKit.productTitle || ""} />
             )}
-            {catalogue.length > 0 ? (
-              <s-select name="catalogueItemId" label="Service">
-                <s-option value="">Not sure — take a look</s-option>
-                {catalogue.map((item) => (
-                  <s-option key={item.id} value={item.id}>
-                    {item.name}
-                  </s-option>
-                ))}
-              </s-select>
-            ) : (
-              <s-text-field name="serviceName" label="Service (optional)" />
-            )}
-            <s-text-field name="issueDescription" label="Notes (optional)" multiline={3} />
+            <s-paragraph tone="subdued">
+              We'll email them a branded link to a form where they describe what's needed and
+              submit the request themselves.
+            </s-paragraph>
             <s-box paddingBlockStart="tight">
               <s-button type="submit" {...(isBusy ? { loading: true } : {})}>
-                Create case & send email
+                Send them the form
               </s-button>
               {hasKits && (
                 <s-button
@@ -262,7 +258,7 @@ export default function Index() {
         Create a demo case
       </s-button>
 
-      <StartCaseSection recentKits={recentKits} catalogue={catalogue} />
+      <StartCaseSection recentKits={recentKits} />
 
       <s-section heading="Your customer request link">
         <s-paragraph>

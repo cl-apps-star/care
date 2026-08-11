@@ -21,7 +21,30 @@ export const loader = async ({ request }) => {
     return { error: "not_found" };
   }
   const catalogue = (await listCatalogue(merchant.id)).filter((c) => c.active);
-  return { merchant, catalogue, shop };
+
+  // Personalized invite links (sent via sendCareRequestInviteEmail from the
+  // merchant dashboard's "Start a case" section) carry the customer's
+  // order/email/name/item as query params, so they land straight on the
+  // details step already matched to their order instead of re-typing what
+  // the merchant already told us. A plain shared link (no `email` param)
+  // still works exactly as before — starts on the order-lookup step.
+  const prefillEmail = url.searchParams.get("email");
+  let prefill = null;
+  if (prefillEmail) {
+    const prefillOrder = (url.searchParams.get("order") || "").trim();
+    const lookup = prefillOrder
+      ? await findOrderForCustomer({ shop, orderNumber: prefillOrder, email: prefillEmail })
+      : { found: false, reason: "not_found" };
+    prefill = {
+      lookup,
+      orderNumber: prefillOrder,
+      email: prefillEmail,
+      name: url.searchParams.get("name") || "",
+      productTitle: url.searchParams.get("productTitle") || "",
+    };
+  }
+
+  return { merchant, catalogue, shop, prefill };
 };
 
 export const action = async ({ request }) => {
@@ -244,10 +267,17 @@ export default function CareRequestPage() {
     );
   }
 
-  const showDetails = actionData?.step === "details";
-  const lookup = showDetails ? actionData.lookup : null;
-  const orderNumber = showDetails ? actionData.orderNumber : "";
-  const email = showDetails ? actionData.email : "";
+  // A real form submission (actionData present) always wins over the
+  // loader's prefill — the prefill only matters for the very first render
+  // of a personalized invite link.
+  const fromAction = actionData?.step === "details";
+  const prefill = !actionData ? data.prefill : null;
+  const showDetails = fromAction || Boolean(prefill);
+  const lookup = fromAction ? actionData.lookup : prefill?.lookup || null;
+  const orderNumber = fromAction ? actionData.orderNumber : prefill?.orderNumber || "";
+  const email = fromAction ? actionData.email : prefill?.email || "";
+  const prefillName = prefill?.name || "";
+  const prefillProductTitle = prefill?.productTitle || "";
 
   return (
     <Shell brand={merchant}>
@@ -316,14 +346,19 @@ export default function CareRequestPage() {
               ) : null}
               <label className="care-field">
                 <span className="care-field-label">What's the item?</span>
-                <input name="productTitle" placeholder="e.g. Gold signet ring" required />
+                <input
+                  name="productTitle"
+                  placeholder="e.g. Gold signet ring"
+                  defaultValue={prefillProductTitle}
+                  required
+                />
               </label>
             </>
           )}
 
           <label className="care-field">
             <span className="care-field-label">Your name</span>
-            <input name="name" required />
+            <input name="name" defaultValue={prefillName} required />
           </label>
 
           <label className="care-field">

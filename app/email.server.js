@@ -213,6 +213,45 @@ export async function sendCaseReceivedEmail({ careCase, merchant, trackingUrl })
   });
 }
 
+// Sent when a merchant identifies a customer on the dashboard (picking a
+// recently-generated COA kit, or typing in order/email by hand) and wants
+// to invite that specific customer to submit a care request themselves —
+// same premium branded look as every other Care email, matching COA's and
+// In the Making's "here's your personal link" pattern. No CareCase exists
+// yet at send time; `portalUrl` points at the public /care/request form,
+// pre-filled with this customer's order/email/name/item via query params
+// (see care.request.jsx's loader) so they land straight on the "describe
+// the issue" step instead of re-typing what the merchant already knows.
+export async function sendCareRequestInviteEmail({
+  merchant,
+  customerName,
+  customerEmail,
+  orderName,
+  productTitle,
+  portalUrl,
+}) {
+  const piece = productTitle || "your piece";
+  const { html, text, fromName } = renderCareEmail({
+    merchant,
+    preheader: `Let us know if ${piece} ever needs a repair, cleaning, or return.`,
+    metaLine: orderName ? `ORDER ${orderName}` : null,
+    greeting: greetingFor(customerName),
+    paragraphs: [
+      `If <strong>${piece}</strong> ever needs a repair, cleaning, or return, we're here to help.`,
+      `Tap below to tell us what's going on — it only takes a minute, and we'll follow up with a quote and next steps.`,
+    ],
+    ctaLabel: "Start your request",
+    ctaUrl: portalUrl,
+  });
+  return send({
+    fromName,
+    to: customerEmail,
+    subject: `Need a repair or return on ${piece}?`,
+    html,
+    text,
+  });
+}
+
 export async function sendQuoteEmail({ careCase, merchant, trackingUrl }) {
   const total =
     careCase.quoteTotal != null
