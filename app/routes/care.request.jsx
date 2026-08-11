@@ -193,7 +193,7 @@ function Shell({ brand, children }) {
         }
       `}</style>
       <div className="care-req-wrap">
-        <div className="care-req-eyebrow">{brand?.brandName || "Care"}</div>
+        <div className="care-req-eyebrow">{brand?.brandName || "CL Apps"}</div>
         {children}
       </div>
     </div>

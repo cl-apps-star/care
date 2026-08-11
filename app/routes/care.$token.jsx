@@ -175,7 +175,7 @@ export default function CareTrackingPage() {
       `}</style>
 
       <div className="care-wrap">
-        <div className="care-eyebrow">{brand?.brandName || "Care"}</div>
+        <div className="care-eyebrow">{brand?.brandName || "CL Apps"}</div>
 
         <div className="care-hero">
           {careCase.productImageUrl && <img src={careCase.productImageUrl} alt={careCase.productTitle || ""} />}
@@ -256,7 +256,7 @@ export default function CareTrackingPage() {
         )}
 
         <div className="care-foot">
-          Powered by <span className="care-brand">{brand?.brandName || "Care"}</span>
+          Powered by <span className="care-brand">{brand?.brandName || "CL Apps"}</span>
         </div>
       </div>
     </div>
