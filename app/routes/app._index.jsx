@@ -116,17 +116,37 @@ export const action = async ({ request }) => {
 // submit. When COA isn't installed or has zero kits yet, `recentKits` is
 // null and this collapses straight to the same form, blank — no error
 // state, no dead space either way.
-// Three distinct accent colors so the three "how do I start a case" surfaces
-// (and the sections around them) never blur into one shared form the way
-// the old single StartCaseSection did — each gets its own left-border
-// stripe, consistently, so the merchant can tell at a glance which flow
-// they're in without reading the heading.
-const ACCENT = {
-  kits: "#8a7758", // bronze — matches Digital Unboxing & COA Kit's own accent
-  link: "#5b7a8a", // slate blue
-  manual: "#9a6b56", // terracotta
-  active: "#6b8a72", // sage
+// Same tinted-card pattern already used across the suite (Digital Unboxing &
+// COA Kit, In the Making's maker profile page): a plain div with a tinted
+// background and a colored left-border accent, so each section reads as its
+// own distinct block at a glance. Polaris web components like s-box don't
+// reliably apply arbitrary inline styles, which is why a plain div is used
+// here instead.
+const SECTION_TINTS = {
+  kits: { background: "#FBF8F3", border: "#8a7758" }, // bronze — matches Digital Unboxing & COA Kit's own accent
+  link: { background: "#F2F7F9", border: "#5b7a8a" }, // slate blue
+  manual: { background: "#FBF3EF", border: "#9a6b56" }, // terracotta
+  active: { background: "#F3F7F4", border: "#6b8a72" }, // sage
 };
+
+function TintedSection({ tint, children }) {
+  const style = SECTION_TINTS[tint] || SECTION_TINTS.kits;
+  return (
+    <div
+      style={{
+        background: style.background,
+        border: `1px solid ${style.border}33`,
+        borderLeft: `5px solid ${style.border}`,
+        borderRadius: 8,
+        padding: 16,
+      }}
+    >
+      <s-stack direction="block" gap="base">
+        {children}
+      </s-stack>
+    </div>
+  );
+}
 
 // Picking a recent COA kit and sending that customer an invite email. Fully
 // separate from ManualEntrySection below — its own section, its own form,
@@ -142,88 +162,86 @@ function RecentKitsSection({ recentKits }) {
 
   return (
     <s-section heading="Start a case — from a recent COA kit">
-      <s-box style={{ borderLeft: `4px solid ${ACCENT.kits}`, paddingLeft: "16px" }}>
-        <s-stack direction="block" gap="base">
-          {justSent && (
-            <s-banner tone="success">
-              Sent! We've emailed them a link to fill in the rest of the details themselves.
-            </s-banner>
-          )}
-          <s-paragraph>
-            Recently generated Digital Unboxing Kits — pick one to email that customer a link to
-            request a repair, cleaning, or return.
-          </s-paragraph>
-          <s-stack direction="block" gap="tight">
-            {recentKits.map((kit) => (
-              <s-box key={kit.certificateId} padding="base" borderWidth="base" borderRadius="base">
-                <s-stack direction="inline" gap="base" alignItems="center" justifyContent="space-between">
-                  <s-stack direction="block" gap="tight">
-                    <s-text weight="bold">
-                      {kit.productTitle || "Untitled piece"}
-                      {kit.orderName ? ` — ${kit.orderName}` : ""}
-                    </s-text>
-                    <s-text tone="subdued">
-                      {kit.customerName || "—"} · {kit.customerEmail || "—"}
-                    </s-text>
-                  </s-stack>
-                  <s-button variant="secondary" onClick={() => setSelectedKit(kit)}>
-                    Send them the form
-                  </s-button>
+      <TintedSection tint="kits">
+        {justSent && (
+          <s-banner tone="success">
+            Sent! We've emailed them a link to fill in the rest of the details themselves.
+          </s-banner>
+        )}
+        <s-paragraph>
+          Recently generated Digital Unboxing Kits — pick one to email that customer a link to
+          request a repair, cleaning, or return.
+        </s-paragraph>
+        <s-stack direction="block" gap="tight">
+          {recentKits.map((kit) => (
+            <s-box key={kit.certificateId} padding="base" borderWidth="base" borderRadius="base">
+              <s-stack direction="inline" gap="base" alignItems="center" justifyContent="space-between">
+                <s-stack direction="block" gap="tight">
+                  <s-text weight="bold">
+                    {kit.productTitle || "Untitled piece"}
+                    {kit.orderName ? ` — ${kit.orderName}` : ""}
+                  </s-text>
+                  <s-text tone="subdued">
+                    {kit.customerName || "—"} · {kit.customerEmail || "—"}
+                  </s-text>
                 </s-stack>
-              </s-box>
-            ))}
-          </s-stack>
-
-          {selectedKit && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const fd = new FormData(e.currentTarget);
-                fd.set("intent", "send_request_email");
-                fetcher.submit(fd, { method: "POST" });
-                setSelectedKit(null);
-                e.currentTarget.reset();
-              }}
-            >
-              <input type="hidden" name="intent" value="send_request_email" />
-              <input type="hidden" name="shopifyOrderName" value={selectedKit.orderName || ""} />
-              <s-stack direction="block" gap="base">
-                <s-banner tone="info">
-                  Sending to {selectedKit.customerName || "this customer"} about{" "}
-                  {selectedKit.productTitle || "this piece"}
-                  {selectedKit.orderName ? ` (${selectedKit.orderName})` : ""} —{" "}
-                  <s-link onClick={() => setSelectedKit(null)}>change</s-link>
-                </s-banner>
-                <s-text-field
-                  name="customerName"
-                  label="Customer name"
-                  defaultValue={selectedKit.customerName || ""}
-                />
-                <s-text-field
-                  name="customerEmail"
-                  label="Customer email"
-                  type="email"
-                  defaultValue={selectedKit.customerEmail || ""}
-                  required
-                />
-                <s-text-field
-                  name="productTitle"
-                  label="Item"
-                  defaultValue={selectedKit.productTitle || ""}
-                />
-                <s-box paddingBlockStart="tight">
-                  <s-button type="submit" {...(isBusy ? { loading: true } : {})}>
-                    Send them the form
-                  </s-button>
-                  <s-button variant="tertiary" onClick={() => setSelectedKit(null)}>
-                    Cancel
-                  </s-button>
-                </s-box>
+                <s-button variant="secondary" onClick={() => setSelectedKit(kit)}>
+                  Send them the form
+                </s-button>
               </s-stack>
-            </form>
-          )}
+            </s-box>
+          ))}
         </s-stack>
-      </s-box>
+
+        {selectedKit && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
+              fd.set("intent", "send_request_email");
+              fetcher.submit(fd, { method: "POST" });
+              setSelectedKit(null);
+              e.currentTarget.reset();
+            }}
+          >
+            <input type="hidden" name="intent" value="send_request_email" />
+            <input type="hidden" name="shopifyOrderName" value={selectedKit.orderName || ""} />
+            <s-stack direction="block" gap="base">
+              <s-banner tone="info">
+                Sending to {selectedKit.customerName || "this customer"} about{" "}
+                {selectedKit.productTitle || "this piece"}
+                {selectedKit.orderName ? ` (${selectedKit.orderName})` : ""} —{" "}
+                <s-link onClick={() => setSelectedKit(null)}>change</s-link>
+              </s-banner>
+              <s-text-field
+                name="customerName"
+                label="Customer name"
+                defaultValue={selectedKit.customerName || ""}
+              />
+              <s-text-field
+                name="customerEmail"
+                label="Customer email"
+                type="email"
+                defaultValue={selectedKit.customerEmail || ""}
+                required
+              />
+              <s-text-field
+                name="productTitle"
+                label="Item"
+                defaultValue={selectedKit.productTitle || ""}
+              />
+              <s-box paddingBlockStart="tight">
+                <s-button type="submit" {...(isBusy ? { loading: true } : {})}>
+                  Send them the form
+                </s-button>
+                <s-button variant="tertiary" onClick={() => setSelectedKit(null)}>
+                  Cancel
+                </s-button>
+              </s-box>
+            </s-stack>
+          </form>
+        )}
+      </TintedSection>
     </s-section>
   );
 }
@@ -240,42 +258,40 @@ function ManualEntrySection() {
 
   return (
     <s-section heading="Start a case — enter details manually">
-      <s-box style={{ borderLeft: `4px solid ${ACCENT.manual}`, paddingLeft: "16px" }}>
-        <s-stack direction="block" gap="base">
-          {justSent && (
-            <s-banner tone="success">
-              Sent! We've emailed them a link to fill in the rest of the details themselves.
-            </s-banner>
-          )}
-          <s-paragraph>
-            No COA kit for this customer, or starting from an order number instead? Enter what
-            you know below and we'll email them a link to fill in the rest.
-          </s-paragraph>
-          <form
-            key={formKey}
-            onSubmit={(e) => {
-              e.preventDefault();
-              const fd = new FormData(e.currentTarget);
-              fd.set("intent", "send_request_email");
-              fetcher.submit(fd, { method: "POST" });
-              setFormKey((k) => k + 1);
-            }}
-          >
-            <input type="hidden" name="intent" value="send_request_email" />
-            <s-stack direction="block" gap="base">
-              <s-text-field name="customerName" label="Customer name" />
-              <s-text-field name="customerEmail" label="Customer email" type="email" required />
-              <s-text-field name="shopifyOrderName" label="Order number (optional)" />
-              <s-text-field name="productTitle" label="Item (optional)" />
-              <s-box paddingBlockStart="tight">
-                <s-button type="submit" {...(isBusy ? { loading: true } : {})}>
-                  Send them the form
-                </s-button>
-              </s-box>
-            </s-stack>
-          </form>
-        </s-stack>
-      </s-box>
+      <TintedSection tint="manual">
+        {justSent && (
+          <s-banner tone="success">
+            Sent! We've emailed them a link to fill in the rest of the details themselves.
+          </s-banner>
+        )}
+        <s-paragraph>
+          No COA kit for this customer, or starting from an order number instead? Enter what you
+          know below and we'll email them a link to fill in the rest.
+        </s-paragraph>
+        <form
+          key={formKey}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget);
+            fd.set("intent", "send_request_email");
+            fetcher.submit(fd, { method: "POST" });
+            setFormKey((k) => k + 1);
+          }}
+        >
+          <input type="hidden" name="intent" value="send_request_email" />
+          <s-stack direction="block" gap="base">
+            <s-text-field name="customerName" label="Customer name" />
+            <s-text-field name="customerEmail" label="Customer email" type="email" required />
+            <s-text-field name="shopifyOrderName" label="Order number (optional)" />
+            <s-text-field name="productTitle" label="Item (optional)" />
+            <s-box paddingBlockStart="tight">
+              <s-button type="submit" {...(isBusy ? { loading: true } : {})}>
+                Send them the form
+              </s-button>
+            </s-box>
+          </s-stack>
+        </form>
+      </TintedSection>
     </s-section>
   );
 }
@@ -299,18 +315,16 @@ export default function Index() {
       <RecentKitsSection recentKits={recentKits} />
 
       <s-section heading="Your customer request link">
-        <s-box style={{ borderLeft: `4px solid ${ACCENT.link}`, paddingLeft: "16px" }}>
-          <s-stack direction="block" gap="base">
-            <s-paragraph>
-              Share this link anywhere your customers need it — your order confirmation email,
-              thank you page, or product page — so they can request a repair, cleaning, or return
-              themselves. Every submission lands here as a new case.
-            </s-paragraph>
-            <s-box padding="base" borderWidth="base" borderRadius="base">
-              <s-text>{requestLink}</s-text>
-            </s-box>
-          </s-stack>
-        </s-box>
+        <TintedSection tint="link">
+          <s-paragraph>
+            Share this link anywhere your customers need it — your order confirmation email,
+            thank you page, or product page — so they can request a repair, cleaning, or return
+            themselves. Every submission lands here as a new case.
+          </s-paragraph>
+          <s-box padding="base" borderWidth="base" borderRadius="base">
+            <s-text>{requestLink}</s-text>
+          </s-box>
+        </TintedSection>
       </s-section>
 
       <ManualEntrySection />
@@ -326,35 +340,33 @@ export default function Index() {
       )}
 
       <s-section heading={`Active cases (${active.length})`}>
-        <s-box style={{ borderLeft: `4px solid ${ACCENT.active}`, paddingLeft: "16px" }}>
+        <TintedSection tint="active">
+          {active.length === 0 && (
+            <s-paragraph>
+              No requests yet — once a customer submits one, it'll show up here. Try the demo
+              case button above to see how it works.
+            </s-paragraph>
+          )}
           <s-stack direction="block" gap="base">
-            {active.length === 0 && (
-              <s-paragraph>
-                No requests yet — once a customer submits one, it'll show up here. Try the demo
-                case button above to see how it works.
-              </s-paragraph>
-            )}
-            <s-stack direction="block" gap="base">
-              {active.map((c) => (
-                <s-box key={c.id} padding="base" borderWidth="base" borderRadius="base">
-                  <s-stack direction="inline" gap="base" alignItems="center">
-                    <s-stack direction="block" gap="tight">
-                      <s-text weight="bold">
-                        {c.productTitle || "Untitled piece"} — {c.serviceName}
-                      </s-text>
-                      <s-text tone="subdued">
-                        {c.customerName} · {c.customerEmail}
-                        {c.shopifyOrderName ? ` · ${c.shopifyOrderName}` : ""}
-                      </s-text>
-                      <s-badge>{stageLabel(c.status)}</s-badge>
-                    </s-stack>
-                    <s-link href={`/app/cases/${c.id}`}>Open</s-link>
+            {active.map((c) => (
+              <s-box key={c.id} padding="base" borderWidth="base" borderRadius="base">
+                <s-stack direction="inline" gap="base" alignItems="center">
+                  <s-stack direction="block" gap="tight">
+                    <s-text weight="bold">
+                      {c.productTitle || "Untitled piece"} — {c.serviceName}
+                    </s-text>
+                    <s-text tone="subdued">
+                      {c.customerName} · {c.customerEmail}
+                      {c.shopifyOrderName ? ` · ${c.shopifyOrderName}` : ""}
+                    </s-text>
+                    <s-badge>{stageLabel(c.status)}</s-badge>
                   </s-stack>
-                </s-box>
-              ))}
-            </s-stack>
+                  <s-link href={`/app/cases/${c.id}`}>Open</s-link>
+                </s-stack>
+              </s-box>
+            ))}
           </s-stack>
-        </s-box>
+        </TintedSection>
       </s-section>
 
       <s-section heading={`Completed (${completed.length})`}>
