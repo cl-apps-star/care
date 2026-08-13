@@ -18,6 +18,8 @@ import {
   sendCareRequestInviteEmail,
 } from "../email.server";
 import { getRecentCoaKits } from "../coa-lookup.server";
+import { getPlanSummary } from "../plan.server";
+import { FREE_CASE_LIMIT } from "../planConstants";
 
 // Split out of the old app._index.jsx (which is now just the getting-
 // started overview at /app) so "here's how Care works" and "here are my
@@ -28,14 +30,15 @@ import { getRecentCoaKits } from "../coa-lookup.server";
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const merchant = await getOrCreateMerchantProfile(session.shop);
-  const [cases, catalogue, recentKits] = await Promise.all([
+  const [cases, catalogue, recentKits, planSummary] = await Promise.all([
     listCasesForMerchant(merchant.id),
     listCatalogue(merchant.id),
     getRecentCoaKits(session.shop),
+    getPlanSummary(session.shop),
   ]);
   const appUrl = process.env.SHOPIFY_APP_URL || "";
   const requestLink = `${appUrl}/care/request?shop=${encodeURIComponent(session.shop)}`;
-  return { merchant, cases, catalogue, requestLink, recentKits };
+  return { merchant, cases, catalogue, requestLink, recentKits, planSummary };
 };
 
 export const action = async ({ request }) => {
@@ -173,6 +176,35 @@ function TintedSection({ tint, children }) {
         {children}
       </s-stack>
     </div>
+  );
+}
+
+// Free-plan usage, shown up front — the COA Kit app always tells you where
+// you stand ("X of Y kits used") and warns before you run out; Care didn't,
+// so hitting the limit showed up as a dead-end "we couldn't accept this
+// request" message on the CUSTOMER's public form with nothing on the
+// merchant's side explaining why. That message has to stay vague to the
+// customer (see runRequestAction in care-request.server.js), which makes
+// it more important, not less, that the merchant sees this coming here.
+// Studio has no cap, so this only renders for free-plan merchants.
+function PlanUsageBanner({ planSummary }) {
+  if (!planSummary || planSummary.plan !== "free") return null;
+  const { count } = planSummary;
+  const remaining = FREE_CASE_LIMIT - count;
+  const atLimit = remaining <= 0;
+  const low = !atLimit && remaining <= 1;
+
+  return (
+    <s-banner tone={atLimit ? "critical" : low ? "warning" : "info"}>
+      <s-stack direction="inline" gap="base" alignItems="center" justifyContent="space-between">
+        <s-text>
+          {atLimit
+            ? `You've used all ${FREE_CASE_LIMIT} free cases this month — new customer submissions will be turned away until next month or you upgrade.`
+            : `${count} of ${FREE_CASE_LIMIT} free cases used this month.`}
+        </s-text>
+        {(atLimit || low) && <s-link href="/app/billing">Upgrade to Studio</s-link>}
+      </s-stack>
+    </s-banner>
   );
 }
 
@@ -352,7 +384,7 @@ function ManualEntrySection() {
 }
 
 export default function CasesIndex() {
-  const { merchant, cases, catalogue, requestLink, recentKits } = useLoaderData();
+  const { merchant, cases, catalogue, requestLink, recentKits, planSummary } = useLoaderData();
   const fetcher = useFetcher();
 
   // Cases actually waiting on the merchant (a new request, an item that
@@ -382,6 +414,8 @@ export default function CasesIndex() {
           below. */}
       <s-section heading="Open a new case">
         <s-stack direction="block" gap="large">
+          <PlanUsageBanner planSummary={planSummary} />
+
           <RecentKitsSection recentKits={recentKits} />
 
           <s-stack direction="block" gap="base">

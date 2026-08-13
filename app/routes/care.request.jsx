@@ -146,8 +146,8 @@ export default function CareRequestPage() {
       <Shell brand={merchant}>
         <h1>Thanks — we've got your request</h1>
         <p className="care-req-intro">
-          We've sent a confirmation to <strong>{actionData.customerEmail}</strong> with a link to
-          track progress. We'll be in touch with next steps shortly.
+          We've sent a confirmation from <strong>{merchant?.brandName || merchant?.shop}</strong>{" "}
+          with a link to track progress. We'll be in touch with next steps shortly.
         </p>
         <div style={{ textAlign: "center" }}>
           <a href={actionData.trackingUrl} className="care-req-link">
