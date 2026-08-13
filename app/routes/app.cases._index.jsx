@@ -9,7 +9,7 @@ import {
   createCareCase,
   advanceCase,
 } from "../care.server";
-import { stageLabel } from "../care-stages";
+import { stageLabel, statusTone, needsMerchantAction } from "../care-stages";
 import {
   sendCaseReceivedEmail,
   sendStageUpdateEmail,
@@ -332,7 +332,14 @@ export default function CasesIndex() {
   const { merchant, cases, catalogue, requestLink, recentKits } = useLoaderData();
   const fetcher = useFetcher();
 
-  const active = cases.filter((c) => c.status !== "completed" && c.status !== "declined");
+  // Cases actually waiting on the merchant (a new request, an item that
+  // just arrived, a quote to build, a stage to advance) surface first —
+  // previously this list was just insertion order, so a case needing
+  // action today could sit below three that are simply waiting on the
+  // customer with nothing for the merchant to do.
+  const active = cases
+    .filter((c) => c.status !== "completed" && c.status !== "declined")
+    .sort((a, b) => Number(needsMerchantAction(b)) - Number(needsMerchantAction(a)));
   const completed = cases.filter((c) => c.status === "completed");
 
   return (
@@ -402,7 +409,10 @@ export default function CasesIndex() {
                       {c.customerName} · {c.customerEmail}
                       {c.shopifyOrderName ? ` · ${c.shopifyOrderName}` : ""}
                     </s-text>
-                    <s-badge>{stageLabel(c.status)}</s-badge>
+                    <s-stack direction="inline" gap="tight">
+                      <s-badge tone={statusTone(c.status)}>{stageLabel(c.status)}</s-badge>
+                      {needsMerchantAction(c) && <s-badge tone="critical">Needs you</s-badge>}
+                    </s-stack>
                   </s-stack>
                   <s-link href={`/app/cases/${c.id}`}>Open</s-link>
                 </s-stack>

@@ -9,7 +9,7 @@ import {
     advanceCase,
     addInternalNote,
 } from "../care.server";
-import { STAGES, stageLabel } from "../care-stages";
+import { STAGES, stageLabel, statusTone, nextStage, needsMerchantAction } from "../care-stages";
 import { sendQuoteEmail, sendStageUpdateEmail, sendReadyToReturnEmail } from "../email.server";
 
 // Same tinted-card pattern used on the dashboard (app._index.jsx's
@@ -52,6 +52,44 @@ function OverviewRow({ label, children }) {
       <s-text>{children}</s-text>
     </s-stack>
   );
+}
+
+// Status used to be a small plain-text line buried in the Overview card —
+// easy to miss, and even once you saw it, "Approved" alone doesn't say
+// whether that means "waiting on the customer" or "you need to do
+// something now". This gives a one-line plain-English answer to "what's
+// actually going on, and is there anything I need to do right now" — shown
+// in a prominent banner at the very top of the page, above every section,
+// so the merchant doesn't have to read the whole page to find out.
+function statusGuidance(careCase) {
+  switch (careCase.status) {
+    case "request_received":
+      return "New request — take a look and move it to Awaiting item or Assessment when you're ready.";
+    case "awaiting_item":
+      return "Waiting on the customer to send the item back to you.";
+    case "item_received":
+      return "Item has arrived — assess it and build a quote when you're ready.";
+    case "assessment":
+      return "You're assessing the item. Build and send a quote below when it's ready.";
+    case "quote_sent":
+      return "Waiting on the customer to approve or decline the quote you sent.";
+    case "approved":
+      return careCase.paymentStatus === "paid"
+        ? "Customer approved and paid — get started on the work."
+        : "Customer approved the quote. Payment is still outstanding, but you can start the work whenever suits.";
+    case "in_service":
+      return "Work is in progress.";
+    case "quality_check":
+      return "In quality check before it goes back to the customer.";
+    case "ready_to_return":
+      return "Ready to send back — advance to Completed once it's on its way.";
+    case "completed":
+      return "This case is done.";
+    case "declined":
+      return "Customer declined the quote. Nothing further needed unless they reach back out.";
+    default:
+      return null;
+  }
 }
 
 export const loader = async ({ request, params }) => {
@@ -125,27 +163,48 @@ export default function CaseDetail() {
   const pendingIntent = fetcher.state !== "idle" ? fetcher.formData?.get("intent") : null;
   const resultIntent = fetcher.state === "idle" && fetcher.data?.ok ? fetcher.data?.intent : null;
 
+  const nextStageEntry = nextStage(careCase.status);
+  const needsAction = needsMerchantAction(careCase);
+  const quoteAlreadySent = careCase.quoteSentAt != null;
+
   return (
         <s-page heading={`${careCase.productTitle || "Case"} - ${careCase.serviceName}`} backAction={{ url: "/app/cases" }}>
+                {/* One glance, top of page, answers "what's going on and is
+                    there anything I need to do" — the tone (color) and the
+                    "Needs you" flag do the same job as scanning the whole
+                    page used to. Everything below this is detail/action,
+                    not the first thing the merchant has to parse. */}
+                <s-banner tone={statusTone(careCase.status)}>
+                  <s-stack direction="inline" gap="tight" alignItems="center">
+                    <s-badge tone={statusTone(careCase.status)}>{stageLabel(careCase.status)}</s-badge>
+                    {needsAction && <s-badge tone="critical">Needs you</s-badge>}
+                  </s-stack>
+                  <s-paragraph>{statusGuidance(careCase)}</s-paragraph>
+                </s-banner>
+
                 <s-section heading="Overview">
                         <TintedSection tint="overview">
                           <OverviewRow label="Customer">{careCase.customerName} ({careCase.customerEmail})</OverviewRow>
                           {careCase.shopifyOrderName && (
                             <OverviewRow label="Order">{careCase.shopifyOrderName}</OverviewRow>
                           )}
-                          <OverviewRow label="Status">{stageLabel(careCase.status)}</OverviewRow>
                           {careCase.issueDescription && (
                             <OverviewRow label="Issue">{careCase.issueDescription}</OverviewRow>
                           )}
                         </TintedSection>
                 </s-section>
 
-              <s-section heading="Quote builder">
+              <s-section heading={quoteAlreadySent ? "Quote builder — sent" : "Quote builder"}>
                 <TintedSection tint="quote">
                       {resultIntent === "set_and_send_quote" && (
                         <s-banner tone="success">
                           <s-paragraph>Quote sent to the customer.</s-paragraph>
                         </s-banner>
+                      )}
+                      {quoteAlreadySent && !resultIntent && (
+                        <s-paragraph tone="subdued">
+                          Already sent to the customer — change any field and send again to update it (this re-sends the quote email).
+                        </s-paragraph>
                       )}
                       <form
                                   onSubmit={(e) => {
@@ -162,7 +221,11 @@ export default function CaseDetail() {
                                             <s-text-field name="tax" label="Tax" type="number" step="0.01" defaultValue={careCase.quoteTax ?? ""} />
                                             <s-text-area name="note" label="Note to customer" rows={4} defaultValue={careCase.quoteNote ?? ""} />
                                             <s-button type="submit" loading={pendingIntent === "set_and_send_quote" || undefined}>
-                                              {pendingIntent === "set_and_send_quote" ? "Sending…" : "Send quote"}
+                                              {pendingIntent === "set_and_send_quote"
+                                                ? "Sending…"
+                                                : quoteAlreadySent
+                                                ? "Update & resend quote"
+                                                : "Send quote"}
                                             </s-button>
 
                                 </s-stack>
@@ -175,7 +238,7 @@ export default function CaseDetail() {
                 </TintedSection>
               </s-section>
 
-              <s-section heading="Advance stage">
+              <s-section heading={nextStageEntry ? `Next step: ${nextStageEntry.label}` : "Advance stage"}>
                 <TintedSection tint="advance">
                       {resultIntent === "advance" && (
                         <s-banner tone="success">
@@ -184,6 +247,9 @@ export default function CaseDetail() {
                             {fetcher.data?.newStatus ? "." : " the next stage."}
                           </s-paragraph>
                         </s-banner>
+                      )}
+                      {!nextStageEntry && (
+                        <s-paragraph tone="subdued">This case is at its final stage.</s-paragraph>
                       )}
                       <form
                                   onSubmit={(e) => {
@@ -195,15 +261,21 @@ export default function CaseDetail() {
                                   }}
                                 >
                                 <s-stack direction="block" gap="base">
-                                            <s-text-field name="note" label="Update note (optional)" />
-                                            <s-checkbox name="notify" label="Notify customer" defaultChecked />
-                                            <s-button type="submit" loading={pendingIntent === "advance" || undefined}>
-                                                          {pendingIntent === "advance" ? "Advancing…" : "Advance to next stage"}
-                                            </s-button>
+                                            {nextStageEntry && (
+                                              <s-text-field name="note" label="Update note (optional)" />
+                                            )}
+                                            {nextStageEntry && (
+                                              <s-checkbox name="notify" label="Notify customer" defaultChecked />
+                                            )}
+                                            {nextStageEntry && (
+                                              <s-button type="submit" loading={pendingIntent === "advance" || undefined}>
+                                                {pendingIntent === "advance" ? "Advancing…" : `Advance to "${nextStageEntry.label}"`}
+                                              </s-button>
+                                            )}
 
                                 </s-stack>
                       </form>
-                      <s-paragraph tone="subdued">Stages: {STAGES.map((s) => s.label).join(" -> ")}</s-paragraph>
+                      <s-paragraph tone="subdued">All stages: {STAGES.map((s) => s.label).join(" → ")}</s-paragraph>
                 </TintedSection>
               </s-section>
         
