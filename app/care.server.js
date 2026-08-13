@@ -152,7 +152,15 @@ export async function addInternalNote(caseId, note) {
 
 // ---- Quote builder ---------------------------------------------------
 
-export async function setQuote(caseId, { labourCost = 0, partsCost = 0, shippingCost = 0, tax = 0, note, currency = "GBP" }) {
+// Tax is entered by the merchant as a PERCENTAGE (e.g. "20" meaning 20%),
+// not a flat cash amount — matches how sales/VAT tax is actually quoted.
+// It's calculated here off the subtotal (labour + parts + shipping) and
+// stored two ways: quoteTaxPercent (what the merchant typed, so the form
+// shows it back correctly if they reopen/edit the quote) and quoteTax
+// (the resulting CASH amount — everything downstream, the customer's quote
+// breakdown, the Shopify draft order line item in care-payment.server.js,
+// still reads a real currency amount, not a percent).
+export async function setQuote(caseId, { labourCost = 0, partsCost = 0, shippingCost = 0, taxPercent = 0, note, currency = "GBP" }) {
     // Guard every field against blank/malformed input producing NaN — a NaN
     // quoteTotal gets silently written as NULL by Postgres, which used to
     // leave the customer tracking page with no quote to show and no
@@ -161,15 +169,18 @@ export async function setQuote(caseId, { labourCost = 0, partsCost = 0, shipping
     const safeLabour = Number(labourCost) || 0;
     const safeParts = Number(partsCost) || 0;
     const safeShipping = Number(shippingCost) || 0;
-    const safeTax = Number(tax) || 0;
-    const total = safeLabour + safeParts + safeShipping + safeTax;
+    const safeTaxPercent = Number(taxPercent) || 0;
+    const subtotal = safeLabour + safeParts + safeShipping;
+    const taxAmount = Math.round(subtotal * (safeTaxPercent / 100) * 100) / 100;
+    const total = subtotal + taxAmount;
     const updated = await prisma.careCase.update({
           where: { id: caseId },
           data: {
                   quoteLabourCost: safeLabour,
                   quotePartsCost: safeParts,
                   quoteShippingCost: safeShipping,
-                  quoteTax: safeTax,
+                  quoteTaxPercent: safeTaxPercent,
+                  quoteTax: taxAmount,
                   quoteTotal: total,
                   quoteCurrency: currency,
                   quoteNote: note ?? null,

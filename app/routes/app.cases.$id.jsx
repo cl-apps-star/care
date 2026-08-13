@@ -121,7 +121,7 @@ export const action = async ({ request, params }) => {
                   labourCost: formData.get("labourCost") || 0,
                   partsCost: formData.get("partsCost") || 0,
                   shippingCost: formData.get("shippingCost") || 0,
-                  tax: formData.get("tax") || 0,
+                  taxPercent: formData.get("taxPercent") || 0,
                   note: formData.get("note") || undefined,
           });
           const { case: updated } = await sendQuote(careCase.id);
@@ -258,7 +258,7 @@ export default function CaseDetail() {
                                             <s-text-field name="labourCost" label="Labour cost" type="number" step="0.01" defaultValue={careCase.quoteLabourCost ?? ""} />
                                             <s-text-field name="partsCost" label="Parts cost" type="number" step="0.01" defaultValue={careCase.quotePartsCost ?? ""} />
                                             <s-text-field name="shippingCost" label="Return shipping" type="number" step="0.01" defaultValue={careCase.quoteShippingCost ?? ""} />
-                                            <s-text-field name="tax" label="Tax" type="number" step="0.01" defaultValue={careCase.quoteTax ?? ""} />
+                                            <s-text-field name="taxPercent" label="Tax (%)" type="number" step="0.01" defaultValue={careCase.quoteTaxPercent ?? ""} />
                                             <s-text-area name="note" label="Note to customer" rows={4} defaultValue={careCase.quoteNote ?? ""} />
                                             <s-button type="submit" loading={pendingIntent === "set_and_send_quote" || undefined}>
                                               {pendingIntent === "set_and_send_quote"
@@ -273,6 +273,7 @@ export default function CaseDetail() {
                 {careCase.quoteTotal != null && (
                     <s-paragraph>
                                 Current quote total: {careCase.quoteCurrency} {careCase.quoteTotal.toFixed(2)}
+                                {careCase.quoteTaxPercent ? ` (includes ${careCase.quoteCurrency} ${careCase.quoteTax.toFixed(2)} tax at ${careCase.quoteTaxPercent}%)` : ""}
                     </s-paragraph>
                   )}
                 </TintedSection>

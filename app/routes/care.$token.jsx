@@ -82,7 +82,10 @@ function QuoteBreakdown({ careCase }) {
     { label: "Labour", value: careCase.quoteLabourCost },
     { label: "Materials", value: careCase.quotePartsCost },
     { label: "Shipping", value: careCase.quoteShippingCost },
-    { label: "Tax", value: careCase.quoteTax },
+    {
+      label: careCase.quoteTaxPercent ? `Tax (${careCase.quoteTaxPercent}%)` : "Tax",
+      value: careCase.quoteTax,
+    },
   ].filter((r) => Number(r.value || 0) > 0);
 
   // Nothing to break down (e.g. the merchant only ever set a flat total) —

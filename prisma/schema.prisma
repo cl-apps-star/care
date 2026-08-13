@@ -108,6 +108,7 @@ model CareCase {
   quotePartsCost    Float?
   quoteShippingCost Float?
   quoteTax          Float?
+  quoteTaxPercent   Float?
   quoteTotal        Float?
   quoteCurrency     String?  @default("GBP")
   quoteNote         String?
