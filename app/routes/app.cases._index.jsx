@@ -191,7 +191,8 @@ function RecentKitsSection({ recentKits }) {
   };
 
   return (
-    <s-section heading="Start a case — from a recent COA kit">
+    <s-stack direction="block" gap="base">
+      <s-text weight="bold">From a recent COA kit</s-text>
       <TintedSection tint="kits">
         {justSent && (
           <s-banner tone="success">
@@ -272,7 +273,7 @@ function RecentKitsSection({ recentKits }) {
           </form>
         )}
       </TintedSection>
-    </s-section>
+    </s-stack>
   );
 }
 
@@ -287,7 +288,8 @@ function ManualEntrySection() {
   const [formKey, setFormKey] = useState(0);
 
   return (
-    <s-section heading="Start a case — enter details manually">
+    <s-stack direction="block" gap="base">
+      <s-text weight="bold">Enter details manually</s-text>
       <TintedSection tint="manual">
         {justSent && (
           <s-banner tone="success">
@@ -322,7 +324,7 @@ function ManualEntrySection() {
           </s-stack>
         </form>
       </TintedSection>
-    </s-section>
+    </s-stack>
   );
 }
 
@@ -342,22 +344,33 @@ export default function CasesIndex() {
         Create a demo case
       </s-button>
 
-      <RecentKitsSection recentKits={recentKits} />
+      {/* Everything to do with STARTING a case lives under this one heading —
+          previously these were three separate top-level sections (recent
+          kits, request link, manual entry), which read as unrelated blocks
+          rather than three ways to do the same thing. Grouping them makes
+          "open a new case" one clear place, distinct from "active cases"
+          below. */}
+      <s-section heading="Open a new case">
+        <s-stack direction="block" gap="large">
+          <RecentKitsSection recentKits={recentKits} />
 
-      <s-section heading="Your customer request link">
-        <TintedSection tint="link">
-          <s-paragraph>
-            Share this link anywhere your customers need it — your order confirmation email,
-            thank you page, or product page — so they can request a repair, cleaning, or return
-            themselves. Every submission lands here as a new case.
-          </s-paragraph>
-          <s-box padding="base" borderWidth="base" borderRadius="base">
-            <s-text>{requestLink}</s-text>
-          </s-box>
-        </TintedSection>
+          <s-stack direction="block" gap="base">
+            <s-text weight="bold">Your customer request link</s-text>
+            <TintedSection tint="link">
+              <s-paragraph>
+                Share this link anywhere your customers need it — your order confirmation email,
+                thank you page, or product page — so they can request a repair, cleaning, or
+                return themselves. Every submission lands here as a new case.
+              </s-paragraph>
+              <s-box padding="base" borderWidth="base" borderRadius="base">
+                <s-text>{requestLink}</s-text>
+              </s-box>
+            </TintedSection>
+          </s-stack>
+
+          <ManualEntrySection />
+        </s-stack>
       </s-section>
-
-      <ManualEntrySection />
 
       {catalogue.length === 0 && (
         <s-section heading="Set up your service catalogue">
@@ -369,7 +382,7 @@ export default function CasesIndex() {
         </s-section>
       )}
 
-      <s-section heading={`Active cases (${active.length})`}>
+      <s-section heading={`Active open cases (${active.length})`}>
         <TintedSection tint="active">
           {active.length === 0 && (
             <s-paragraph>
