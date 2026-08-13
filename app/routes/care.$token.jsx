@@ -2,7 +2,7 @@ import { useFetcher, useLoaderData } from "react-router";
 import prisma from "../db.server";
 import { getCaseByToken, approveQuote, declineQuote, createPayableOrderForCase } from "../care.server";
 import { stageLabel } from "../care-stages";
-import { sendStageUpdateEmail } from "../email.server";
+import { sendStageUpdateEmail, sendQuoteApprovedAlertEmail } from "../email.server";
 
 // Public, unauthenticated route — the token is the access control,
 // same pattern as In the Making's /journey/:token.
@@ -45,6 +45,19 @@ export const action = async ({ request, params }) => {
         ? "Thanks — we'll get started. You can complete payment any time from your tracking page."
         : "Thanks — we'll get started.",
     });
+
+    // Let the merchant know too — approving a quote is the signal to
+    // actually start the work, and without this the only way to notice was
+    // to have the Care dashboard open (same gap sendNewCaseAlertEmail
+    // closes for new requests). A failure here shouldn't block the
+    // approval the customer just completed.
+    const adminUrl = `https://${merchant.shop}/admin/apps/${process.env.SHOPIFY_API_KEY || ""}/app/cases/${updated.id}`;
+    try {
+      await sendQuoteApprovedAlertEmail({ careCase: updated, merchant, adminUrl });
+    } catch (err) {
+      console.error(`[CARE] Failed to send quote-approved alert for case ${updated.id}:`, err);
+    }
+
     return { ok: true, invoiceUrl };
   }
 
@@ -55,6 +68,44 @@ export const action = async ({ request, params }) => {
 
   return { ok: false };
 };
+
+// Line-item breakdown of the quote — only shows costs the merchant actually
+// entered in the Quote builder; anything left blank (or 0) is skipped
+// entirely rather than showing as a zero line, per the merchant's request.
+// Mirrors exactly what's itemized on the real Shopify invoice
+// (care-payment.server.js's createDraftOrderForQuote), so the customer sees
+// the same breakdown on the tracking page as on what they're actually
+// charged.
+function QuoteBreakdown({ careCase }) {
+  const currency = careCase.quoteCurrency || "GBP";
+  const rows = [
+    { label: "Labour", value: careCase.quoteLabourCost },
+    { label: "Materials", value: careCase.quotePartsCost },
+    { label: "Shipping", value: careCase.quoteShippingCost },
+    { label: "Tax", value: careCase.quoteTax },
+  ].filter((r) => Number(r.value || 0) > 0);
+
+  // Nothing to break down (e.g. the merchant only ever set a flat total) —
+  // skip the section rather than show an empty box.
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="care-quote-breakdown">
+      {rows.map((r) => (
+        <div className="care-quote-row" key={r.label}>
+          <span>{r.label}</span>
+          <span>{currency} {Number(r.value).toFixed(2)}</span>
+        </div>
+      ))}
+      {careCase.quoteTotal != null && (
+        <div className="care-quote-row total">
+          <span>Total</span>
+          <span>{currency} {careCase.quoteTotal.toFixed(2)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function CareTrackingPage() {
   const { careCase } = useLoaderData();
@@ -124,6 +175,21 @@ export default function CareTrackingPage() {
         }
         .care-quote h3 { font-weight: normal; margin: 0 0 8px; font-size: 19px; }
         .care-quote p { margin: 0 0 4px; color: #565349; }
+        .care-quote-breakdown {
+          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+          font-size: 12.5px; color: #565349;
+          margin: 14px 0 4px; padding-top: 14px;
+          border-top: 1px solid #e4e0d8;
+        }
+        .care-quote-row {
+          display: flex; justify-content: space-between;
+          padding: 3px 0;
+        }
+        .care-quote-row.total {
+          margin-top: 6px; padding-top: 8px;
+          border-top: 1px solid #e4e0d8;
+          font-weight: bold; color: #232320;
+        }
         .care-btn-row { display: flex; gap: 12px; margin-top: 18px; }
         .care-btn {
           flex: 1; box-sizing: border-box;
@@ -205,6 +271,7 @@ export default function CareTrackingPage() {
                 : "Your quote is ready to review"}
             </h3>
             {careCase.quoteNote && <p>{careCase.quoteNote}</p>}
+            <QuoteBreakdown careCase={careCase} />
             <div className="care-btn-row">
               <button
                 className="care-btn"
@@ -227,12 +294,17 @@ export default function CareTrackingPage() {
         {careCase.status === "approved" &&
           careCase.shopifyInvoiceUrl &&
           careCase.paymentStatus !== "paid" && (
-            <a href={careCase.shopifyInvoiceUrl} className="care-pay">
-              Pay for your repair
-              {careCase.quoteTotal != null
-                ? ` — ${careCase.quoteCurrency || "GBP"} ${careCase.quoteTotal.toFixed(2)}`
-                : ""}
-            </a>
+            <div className="care-quote">
+              <h3>
+                {careCase.quoteTotal != null
+                  ? <>Amount due: {careCase.quoteCurrency || "GBP"} {careCase.quoteTotal.toFixed(2)}</>
+                  : "Ready for payment"}
+              </h3>
+              <QuoteBreakdown careCase={careCase} />
+              <a href={careCase.shopifyInvoiceUrl} className="care-pay" style={{ marginTop: 18, marginBottom: 0 }}>
+                Pay for your repair
+              </a>
+            </div>
           )}
 
         {careCase.status === "declined" && (

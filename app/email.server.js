@@ -322,6 +322,48 @@ export async function sendNewCaseAlertEmail({ careCase, merchant, adminUrl }) {
   return result;
 }
 
+// Sent to the MERCHANT's own inbox the moment a customer approves a quote —
+// same "merchant needs to know without having the dashboard open" reasoning
+// as sendNewCaseAlertEmail above. Approving a quote is the signal to
+// actually start the work (and, once payment clears, ship it), so a
+// merchant missing this notification could sit on an approved, paid-for
+// repair without realizing it's time to begin. Same tolerant skip-if-blank
+// pattern as the other merchant-facing alert.
+export async function sendQuoteApprovedAlertEmail({ careCase, merchant, adminUrl }) {
+  if (!merchant?.supportEmail) {
+    console.warn(
+      `[CARE] Skipped quote-approved alert for shop ${merchant?.shop} — no support email set in Branding.`,
+    );
+    return { skipped: true, reason: "Merchant has no support email set in Branding." };
+  }
+  const piece = careCase.productTitle || "an item";
+  const total =
+    careCase.quoteTotal != null
+      ? `${careCase.quoteCurrency || "GBP"} ${careCase.quoteTotal.toFixed(2)}`
+      : "";
+  const { html, text, fromName } = renderCareEmail({
+    merchant,
+    preheader: `${careCase.customerName || "A customer"} approved their quote for ${piece}.`,
+    metaLine: careCase.shopifyOrderName ? `ORDER ${careCase.shopifyOrderName}` : null,
+    greeting: "Hi,",
+    paragraphs: [
+      `<strong>${careCase.customerName || "A customer"}</strong> (${careCase.customerEmail}) approved the ${total ? `<strong>${total}</strong> ` : ""}quote for <strong>${piece}</strong> — you're good to get started.`,
+    ],
+    ctaLabel: "View the case",
+    ctaUrl: adminUrl,
+  });
+  const result = await send({
+    fromName,
+    merchant,
+    to: merchant.supportEmail,
+    subject: `Quote approved: ${careCase.customerName || "a customer"}`,
+    html,
+    text,
+  });
+  console.log(`[CARE] Quote-approved alert sent to ${merchant.supportEmail} for case ${careCase.id}.`);
+  return result;
+}
+
 export async function sendQuoteEmail({ careCase, merchant, trackingUrl }) {
   const total =
     careCase.quoteTotal != null
