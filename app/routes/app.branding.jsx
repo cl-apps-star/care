@@ -25,6 +25,12 @@ export const action = async ({ request }) => {
 export default function Branding() {
   const { merchant } = useLoaderData();
   const fetcher = useFetcher();
+  const isSaving = fetcher.state !== "idle";
+  // Save genuinely worked before this fix too — it just never told the
+  // merchant it had. Clicking Save silently updated the database with no
+  // banner, no button state change, nothing, so it looked broken even
+  // though it wasn't. This surfaces the real fetcher result.
+  const justSaved = fetcher.data?.ok === true;
 
   return (
     <s-page heading="Branding" backAction={{ url: "/app" }}>
@@ -33,6 +39,11 @@ export default function Branding() {
           This shows up on your customer request form, tracking page, and every email your
           customers get about their case — so it's worth matching your store's look and feel.
         </s-paragraph>
+        {justSaved && (
+          <s-banner tone="success">
+            <s-paragraph>Branding saved.</s-paragraph>
+          </s-banner>
+        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -45,7 +56,9 @@ export default function Branding() {
             <s-text-field name="primaryColor" label="Primary colour" defaultValue={merchant.primaryColor ?? ""} />
             <s-text-field name="accentColor" label="Accent colour" defaultValue={merchant.accentColor ?? ""} />
             <s-text-field name="supportEmail" label="Support email" defaultValue={merchant.supportEmail ?? ""} />
-            <s-button type="submit">Save</s-button>
+            <s-button type="submit" loading={isSaving || undefined}>
+              {isSaving ? "Saving…" : "Save"}
+            </s-button>
           </s-stack>
         </form>
       </s-section>
