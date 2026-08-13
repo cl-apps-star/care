@@ -153,14 +153,23 @@ export async function addInternalNote(caseId, note) {
 // ---- Quote builder ---------------------------------------------------
 
 export async function setQuote(caseId, { labourCost = 0, partsCost = 0, shippingCost = 0, tax = 0, note, currency = "GBP" }) {
-    const total = Number(labourCost) + Number(partsCost) + Number(shippingCost) + Number(tax);
+    // Guard every field against blank/malformed input producing NaN — a NaN
+    // quoteTotal gets silently written as NULL by Postgres, which used to
+    // leave the customer tracking page with no quote to show and no
+    // approve/decline buttons at all. `|| 0` ensures a real number always
+    // lands here.
+    const safeLabour = Number(labourCost) || 0;
+    const safeParts = Number(partsCost) || 0;
+    const safeShipping = Number(shippingCost) || 0;
+    const safeTax = Number(tax) || 0;
+    const total = safeLabour + safeParts + safeShipping + safeTax;
     const updated = await prisma.careCase.update({
           where: { id: caseId },
           data: {
-                  quoteLabourCost: Number(labourCost),
-                  quotePartsCost: Number(partsCost),
-                  quoteShippingCost: Number(shippingCost),
-                  quoteTax: Number(tax),
+                  quoteLabourCost: safeLabour,
+                  quotePartsCost: safeParts,
+                  quoteShippingCost: safeShipping,
+                  quoteTax: safeTax,
                   quoteTotal: total,
                   quoteCurrency: currency,
                   quoteNote: note ?? null,

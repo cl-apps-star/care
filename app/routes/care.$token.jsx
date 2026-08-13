@@ -197,10 +197,12 @@ export default function CareTrackingPage() {
           </div>
         </div>
 
-        {careCase.status === "quote_sent" && careCase.quoteTotal != null && (
+        {careCase.status === "quote_sent" && (
           <div className="care-quote">
             <h3>
-              Your quote: {careCase.quoteCurrency} {careCase.quoteTotal.toFixed(2)}
+              {careCase.quoteTotal != null
+                ? <>Your quote: {careCase.quoteCurrency} {careCase.quoteTotal.toFixed(2)}</>
+                : "Your quote is ready to review"}
             </h3>
             {careCase.quoteNote && <p>{careCase.quoteNote}</p>}
             <div className="care-btn-row">

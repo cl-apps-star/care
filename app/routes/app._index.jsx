@@ -154,11 +154,26 @@ function TintedSection({ tint, children }) {
 // picking a kit" and "I'm typing in details by hand".
 function RecentKitsSection({ recentKits }) {
   const fetcher = useFetcher();
-  const [selectedKit, setSelectedKit] = useState(null);
+  // Only used as a fallback for the rare kit that has no email on file —
+  // the server requires an email to send, so there's nothing to send
+  // straight away in that case. Every other kit sends immediately on click.
+  const [editingKit, setEditingKit] = useState(null);
+  const [pendingId, setPendingId] = useState(null);
   const isBusy = fetcher.state !== "idle";
   const justSent = fetcher.data?.ok && fetcher.data?.intent === "send_request_email";
 
   if (!recentKits || recentKits.length === 0) return null;
+
+  const sendKit = (kit) => {
+    const fd = new FormData();
+    fd.set("intent", "send_request_email");
+    fd.set("customerName", kit.customerName || "");
+    fd.set("customerEmail", kit.customerEmail || "");
+    fd.set("productTitle", kit.productTitle || "");
+    fd.set("shopifyOrderName", kit.orderName || "");
+    setPendingId(kit.certificateId);
+    fetcher.submit(fd, { method: "POST" });
+  };
 
   return (
     <s-section heading="Start a case — from a recent COA kit">
@@ -185,7 +200,13 @@ function RecentKitsSection({ recentKits }) {
                     {kit.customerName || "—"} · {kit.customerEmail || "—"}
                   </s-text>
                 </s-stack>
-                <s-button variant="secondary" onClick={() => setSelectedKit(kit)}>
+                <s-button
+                  variant="secondary"
+                  {...(isBusy && pendingId === kit.certificateId ? { loading: true } : {})}
+                  onClick={() =>
+                    kit.customerEmail ? sendKit(kit) : setEditingKit(kit)
+                  }
+                >
                   Send them the form
                 </s-button>
               </s-stack>
@@ -193,48 +214,42 @@ function RecentKitsSection({ recentKits }) {
           ))}
         </s-stack>
 
-        {selectedKit && (
+        {editingKit && (
           <form
             onSubmit={(e) => {
               e.preventDefault();
               const fd = new FormData(e.currentTarget);
               fd.set("intent", "send_request_email");
+              setPendingId(editingKit.certificateId);
               fetcher.submit(fd, { method: "POST" });
-              setSelectedKit(null);
+              setEditingKit(null);
               e.currentTarget.reset();
             }}
           >
             <input type="hidden" name="intent" value="send_request_email" />
-            <input type="hidden" name="shopifyOrderName" value={selectedKit.orderName || ""} />
+            <input type="hidden" name="shopifyOrderName" value={editingKit.orderName || ""} />
             <s-stack direction="block" gap="base">
               <s-banner tone="info">
-                Sending to {selectedKit.customerName || "this customer"} about{" "}
-                {selectedKit.productTitle || "this piece"}
-                {selectedKit.orderName ? ` (${selectedKit.orderName})` : ""} —{" "}
-                <s-link onClick={() => setSelectedKit(null)}>change</s-link>
+                This kit doesn't have an email on file for{" "}
+                {editingKit.customerName || "this customer"} — add one to send the form.{" "}
+                <s-link onClick={() => setEditingKit(null)}>cancel</s-link>
               </s-banner>
               <s-text-field
                 name="customerName"
                 label="Customer name"
-                defaultValue={selectedKit.customerName || ""}
+                defaultValue={editingKit.customerName || ""}
               />
-              <s-text-field
-                name="customerEmail"
-                label="Customer email"
-                type="email"
-                defaultValue={selectedKit.customerEmail || ""}
-                required
-              />
+              <s-text-field name="customerEmail" label="Customer email" type="email" required />
               <s-text-field
                 name="productTitle"
                 label="Item"
-                defaultValue={selectedKit.productTitle || ""}
+                defaultValue={editingKit.productTitle || ""}
               />
               <s-box paddingBlockStart="tight">
                 <s-button type="submit" {...(isBusy ? { loading: true } : {})}>
                   Send them the form
                 </s-button>
-                <s-button variant="tertiary" onClick={() => setSelectedKit(null)}>
+                <s-button variant="tertiary" onClick={() => setEditingKit(null)}>
                   Cancel
                 </s-button>
               </s-box>

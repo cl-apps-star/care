@@ -252,6 +252,49 @@ export async function sendCareRequestInviteEmail({
   });
 }
 
+// Sent to the MERCHANT's own inbox the moment a customer submits a request —
+// every other function in this file emails the customer; this is the one
+// exception. Without it, the only way to notice a new case came in was to
+// have the Care dashboard open. Uses the merchant's Branding → "Support
+// email" field, since that's the only merchant-owned email address Care
+// stores (see app.branding.jsx / MerchantProfile.supportEmail). Skips
+// quietly — not an error — if that field is still blank, same tolerant
+// pattern as `send()` skipping a customer email; logs a console warning
+// either way so a missing notification is diagnosable in Railway logs
+// instead of just silently never arriving.
+export async function sendNewCaseAlertEmail({ careCase, merchant, adminUrl }) {
+  if (!merchant?.supportEmail) {
+    console.warn(
+      `[CARE] Skipped new-case alert for shop ${merchant?.shop} — no support email set in Branding.`,
+    );
+    return { skipped: true, reason: "Merchant has no support email set in Branding." };
+  }
+  const piece = careCase.productTitle || "an item";
+  const { html, text, fromName } = renderCareEmail({
+    merchant,
+    preheader: `${careCase.customerName || "A customer"} just submitted a ${careCase.serviceName.toLowerCase()} request.`,
+    metaLine: careCase.shopifyOrderName ? `ORDER ${careCase.shopifyOrderName}` : null,
+    greeting: "Hi,",
+    paragraphs: [
+      `<strong>${careCase.customerName || "A customer"}</strong> (${careCase.customerEmail}) just submitted a ${careCase.serviceName.toLowerCase()} request for <strong>${piece}</strong>.`,
+      careCase.issueDescription
+        ? `They described the issue as: &ldquo;${careCase.issueDescription}&rdquo;`
+        : `No issue description was given — take a look at the case for details.`,
+    ],
+    ctaLabel: "View the case",
+    ctaUrl: adminUrl,
+  });
+  const result = await send({
+    fromName,
+    to: merchant.supportEmail,
+    subject: `New care request from ${careCase.customerName || "a customer"}`,
+    html,
+    text,
+  });
+  console.log(`[CARE] New-case alert sent to ${merchant.supportEmail} for case ${careCase.id}.`);
+  return result;
+}
+
 export async function sendQuoteEmail({ careCase, merchant, trackingUrl }) {
   const total =
     careCase.quoteTotal != null

@@ -12,6 +12,48 @@ import {
 import { STAGES, stageLabel } from "../care-stages";
 import { sendQuoteEmail, sendStageUpdateEmail, sendReadyToReturnEmail } from "../email.server";
 
+// Same tinted-card pattern used on the dashboard (app._index.jsx's
+// SECTION_TINTS/TintedSection) — duplicated here rather than shared from a
+// common module to keep this route's edit self-contained. Overview gets the
+// same "link" slate blue used for the dashboard's info sections; Quote
+// builder gets terracotta (an action the merchant needs to take); Advance
+// stage gets sage (progress/forward motion) — so this page reads as the
+// same considered system as the rest of the app instead of a wall of plain
+// text sections.
+const SECTION_TINTS = {
+  overview: { background: "#F2F7F9", border: "#5b7a8a" }, // slate blue
+  quote: { background: "#FBF3EF", border: "#9a6b56" }, // terracotta
+  advance: { background: "#F3F7F4", border: "#6b8a72" }, // sage
+};
+
+function TintedSection({ tint, children }) {
+  const style = SECTION_TINTS[tint] || SECTION_TINTS.overview;
+  return (
+    <div
+      style={{
+        background: style.background,
+        border: `1px solid ${style.border}33`,
+        borderLeft: `5px solid ${style.border}`,
+        borderRadius: 8,
+        padding: 16,
+      }}
+    >
+      <s-stack direction="block" gap="base">
+        {children}
+      </s-stack>
+    </div>
+  );
+}
+
+function OverviewRow({ label, children }) {
+  return (
+    <s-stack direction="inline" gap="tight" alignItems="baseline">
+      <s-text weight="bold">{label}:</s-text>
+      <s-text>{children}</s-text>
+    </s-stack>
+  );
+}
+
 export const loader = async ({ request, params }) => {
     const { session } = await authenticate.admin(request);
     const merchant = await getOrCreateMerchantProfile(session.shop);
@@ -73,18 +115,20 @@ export default function CaseDetail() {
   return (
         <s-page heading={`${careCase.productTitle || "Case"} - ${careCase.serviceName}`} backAction={{ url: "/app" }}>
                 <s-section heading="Overview">
-                        <s-stack direction="block" gap="tight">
-                                  <s-text>Customer: {careCase.customerName} ({careCase.customerEmail})</s-text>
-                          {careCase.shopifyOrderName && <s-text>Order: {careCase.shopifyOrderName}</s-text>
-                          }
-                                  <s-text>Status: {stageLabel(careCase.status)}</s-text>
-                        
-                          {careCase.issueDescription && <s-text>Issue: {careCase.issueDescription}</s-text>
-                          }
-                        </s-stack>
+                        <TintedSection tint="overview">
+                          <OverviewRow label="Customer">{careCase.customerName} ({careCase.customerEmail})</OverviewRow>
+                          {careCase.shopifyOrderName && (
+                            <OverviewRow label="Order">{careCase.shopifyOrderName}</OverviewRow>
+                          )}
+                          <OverviewRow label="Status">{stageLabel(careCase.status)}</OverviewRow>
+                          {careCase.issueDescription && (
+                            <OverviewRow label="Issue">{careCase.issueDescription}</OverviewRow>
+                          )}
+                        </TintedSection>
                 </s-section>
-        
+
               <s-section heading="Quote builder">
+                <TintedSection tint="quote">
                       <form
                                   onSubmit={(e) => {
                                                 e.preventDefault();
@@ -100,7 +144,7 @@ export default function CaseDetail() {
                                             <s-text-field name="tax" label="Tax" type="number" step="0.01" defaultValue={careCase.quoteTax ?? ""} />
                                             <s-text-field name="note" label="Note to customer" defaultValue={careCase.quoteNote ?? ""} />
                                             <s-button type="submit">Send quote</s-button>
-                                
+
                                 </s-stack>
                       </form>
                 {careCase.quoteTotal != null && (
@@ -108,9 +152,11 @@ export default function CaseDetail() {
                                 Current quote total: {careCase.quoteCurrency} {careCase.quoteTotal.toFixed(2)}
                     </s-paragraph>
                   )}
+                </TintedSection>
               </s-section>
-        
+
               <s-section heading="Advance stage">
+                <TintedSection tint="advance">
                       <form
                                   onSubmit={(e) => {
                                                 e.preventDefault();
@@ -126,10 +172,11 @@ export default function CaseDetail() {
                                             <s-button type="submit">
                                                           Advance to next stage
                                             </s-button>
-                                
+
                                 </s-stack>
                       </form>
                       <s-paragraph tone="subdued">Stages: {STAGES.map((s) => s.label).join(" -> ")}</s-paragraph>
+                </TintedSection>
               </s-section>
         
               <s-section heading="Timeline">

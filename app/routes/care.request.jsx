@@ -1,7 +1,7 @@
 import { Form, useLoaderData, useActionData, useNavigation } from "react-router";
 import prisma from "../db.server";
 import { listCatalogue, createCareCase } from "../care.server";
-import { sendCaseReceivedEmail } from "../email.server";
+import { sendCaseReceivedEmail, sendNewCaseAlertEmail } from "../email.server";
 import { findOrderForCustomer } from "../shopify-orders.server";
 import { checkAndIncrementCaseCount } from "../plan.server";
 
@@ -154,6 +154,12 @@ export const action = async ({ request }) => {
     const appUrl = process.env.SHOPIFY_APP_URL || "";
     const trackingUrl = `${appUrl}/care/${careCase.token}`;
     await sendCaseReceivedEmail({ careCase, merchant, trackingUrl });
+
+    // Let the merchant know a new case landed, not just the customer. Uses
+    // Shopify's embedded-admin URL pattern so the link opens straight to
+    // this case inside the app, in whatever store it's installed on.
+    const adminUrl = `https://${merchant.shop}/admin/apps/${process.env.SHOPIFY_API_KEY || ""}/app/cases/${careCase.id}`;
+    await sendNewCaseAlertEmail({ careCase, merchant, adminUrl });
 
     return { step: "done", trackingUrl, customerEmail: email };
   }
