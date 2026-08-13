@@ -33,6 +33,7 @@ async function sendViaResend({ from, to, replyTo, subject, html, text }) {
   });
 
   if (error) {
+    console.error(`[EMAIL] Resend rejected a send to ${to}: ${error.message || "unknown error"}`);
     return {
       skipped: true,
       reason: error.message || "Resend rejected the email.",
@@ -73,11 +74,12 @@ async function sendViaPostmark({ from, to, replyTo, subject, html, text }) {
   const result = await response.json().catch(() => null);
 
   if (!response.ok || !result || result.ErrorCode) {
-    return {
-      skipped: true,
-      reason:
-        result?.Message || `Postmark rejected the email (HTTP ${response.status}).`,
-    };
+    const reason =
+      result?.Message || `Postmark rejected the email (HTTP ${response.status}).`;
+    console.error(
+      `[EMAIL] Postmark rejected a send to ${to} (ErrorCode ${result?.ErrorCode ?? "n/a"}): ${reason}`,
+    );
+    return { skipped: true, reason };
   }
 
   return {

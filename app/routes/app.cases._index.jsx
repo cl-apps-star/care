@@ -95,7 +95,14 @@ export const action = async ({ request }) => {
     });
     const portalUrl = `${appUrl}/care/request/${invite.token}`;
 
-    await sendCareRequestInviteEmail({
+    // sendCareRequestInviteEmail (and the provider layer underneath it)
+    // never throws on a failed send — a rejected/rate-limited Postmark or
+    // Resend call comes back as { skipped: true, reason } so one bad send
+    // can't 500 the whole page. That means THIS caller has to check the
+    // result and tell the merchant, or a real delivery failure looks
+    // identical to success: no server error, no log line reachable from
+    // the UI, just a "Sent!" banner over an email that never left.
+    const sendResult = await sendCareRequestInviteEmail({
       merchant,
       customerName,
       customerEmail,
@@ -103,6 +110,17 @@ export const action = async ({ request }) => {
       productTitle,
       portalUrl,
     });
+
+    if (sendResult?.skipped) {
+      console.error(
+        `[CARE] send_request_email failed for shop ${session.shop} -> ${customerEmail}: ${sendResult.reason}`,
+      );
+      return {
+        ok: false,
+        intent: "send_request_email",
+        error: `We couldn't send that email: ${sendResult.reason || "unknown error"}`,
+      };
+    }
 
     return { ok: true, intent: "send_request_email" };
   }
@@ -171,6 +189,8 @@ function RecentKitsSection({ recentKits }) {
   const [pendingId, setPendingId] = useState(null);
   const isBusy = fetcher.state !== "idle";
   const justSent = fetcher.data?.ok && fetcher.data?.intent === "send_request_email";
+  const sendFailed =
+    fetcher.data?.ok === false && fetcher.data?.intent === "send_request_email";
 
   if (!recentKits || recentKits.length === 0) return null;
 
@@ -193,6 +213,9 @@ function RecentKitsSection({ recentKits }) {
           <s-banner tone="success">
             Sent! We've emailed them a link to fill in the rest of the details themselves.
           </s-banner>
+        )}
+        {sendFailed && (
+          <s-banner tone="critical">{fetcher.data.error || "That email couldn't be sent."}</s-banner>
         )}
         <s-paragraph>
           Recently generated Digital Unboxing Kits — pick one to email that customer a link to
@@ -280,6 +303,8 @@ function ManualEntrySection() {
   const fetcher = useFetcher();
   const isBusy = fetcher.state !== "idle";
   const justSent = fetcher.data?.ok && fetcher.data?.intent === "send_request_email";
+  const sendFailed =
+    fetcher.data?.ok === false && fetcher.data?.intent === "send_request_email";
   const [formKey, setFormKey] = useState(0);
 
   return (
@@ -290,6 +315,9 @@ function ManualEntrySection() {
           <s-banner tone="success">
             Sent! We've emailed them a link to fill in the rest of the details themselves.
           </s-banner>
+        )}
+        {sendFailed && (
+          <s-banner tone="critical">{fetcher.data.error || "That email couldn't be sent."}</s-banner>
         )}
         <s-paragraph>
           No COA kit for this customer, or starting from an order number instead? Enter what you
