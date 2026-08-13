@@ -151,9 +151,27 @@ export const action = async ({ request, params }) => {
     return { ok: false };
 };
 
+// Customer-uploaded photos are stored as a JSON-stringified array of data
+// URLs on careCase.photos (see createCareCase in care.server.js and the
+// photo-upload handling in care-request.server.js's submit_request action)
+// — but this page never actually rendered them, so a photo the customer
+// attached to their request just silently never showed up anywhere the
+// merchant could see it. Parsing defensively since a malformed/legacy
+// value here shouldn't take down the whole page.
+function parsePhotos(photosJson) {
+  if (!photosJson) return [];
+  try {
+    const parsed = JSON.parse(photosJson);
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function CaseDetail() {
     const { careCase } = useLoaderData();
     const fetcher = useFetcher();
+    const photos = parsePhotos(careCase.photos);
 
   // One fetcher, three forms — pendingIntent/resultIntent tell each form
   // whether IT is the one currently submitting or the one that just
@@ -190,6 +208,28 @@ export default function CaseDetail() {
                           )}
                           {careCase.issueDescription && (
                             <OverviewRow label="Issue">{careCase.issueDescription}</OverviewRow>
+                          )}
+                          {photos.length > 0 && (
+                            <s-stack direction="block" gap="tight">
+                              <s-text weight="bold">Photo{photos.length > 1 ? "s" : ""}:</s-text>
+                              <s-stack direction="inline" gap="tight">
+                                {photos.map((src, i) => (
+                                  <a key={i} href={src} target="_blank" rel="noreferrer">
+                                    <img
+                                      src={src}
+                                      alt={`Customer photo ${i + 1}`}
+                                      style={{
+                                        width: 96,
+                                        height: 96,
+                                        objectFit: "cover",
+                                        borderRadius: 6,
+                                        border: "1px solid #5b7a8a55",
+                                      }}
+                                    />
+                                  </a>
+                                ))}
+                              </s-stack>
+                            </s-stack>
                           )}
                         </TintedSection>
                 </s-section>
