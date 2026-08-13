@@ -17,6 +17,14 @@ import { getCareInviteByToken } from "../care.server";
 // differs in how it figures out `shop` and `prefill`.
 export const loader = async ({ params }) => {
   const invite = await getCareInviteByToken(params.token);
+  // TEMP diagnostic — a real invite is coming back as "This link is
+  // missing some information" (loadRequestPageData's missing_shop branch),
+  // which only happens if `shop` itself is falsy. Logging the raw invite
+  // shape to find out whether `invite.merchant` is missing entirely or
+  // just its `shop` field, since either points to a different bug.
+  console.log(
+    `[CARE] token loader — token=${params.token} invite=${invite ? "found" : "NULL"} merchant=${invite?.merchant ? JSON.stringify({ id: invite.merchant.id, shop: invite.merchant.shop }) : "MISSING"}`,
+  );
   if (!invite) {
     return { error: "not_found" };
   }
