@@ -84,6 +84,7 @@ export async function createDraftOrderForQuote(careCase, shop) {
   const labour = Number(careCase.quoteLabourCost || 0);
   const parts = Number(careCase.quotePartsCost || 0);
   const shipping = Number(careCase.quoteShippingCost || 0);
+  const tax = Number(careCase.quoteTax || 0);
 
   // Custom (non-catalogue) line items — a repair quote isn't tied to a
   // sellable product variant, so these are freeform priced lines rather
@@ -100,6 +101,21 @@ export async function createDraftOrderForQuote(careCase, shop) {
     lineItems.push({
       title: `${careCase.serviceName || "Care & repair"} — parts`,
       originalUnitPrice: parts.toFixed(2),
+      quantity: 1,
+    });
+  }
+  // Tax as its own itemized line, matching the exact amount the merchant
+  // typed into the Quote builder — previously this was handled only via
+  // the taxExempt flag below, which just toggled Shopify's OWN automatic
+  // tax calculation on/off. That doesn't necessarily match what the
+  // customer was actually quoted (different rate, different rounding, or
+  // no tax config at all on the shop), so the invoice total could silently
+  // drift from the quote total. An explicit line item guarantees the two
+  // always agree.
+  if (tax > 0) {
+    lineItems.push({
+      title: "Tax",
+      originalUnitPrice: tax.toFixed(2),
       quantity: 1,
     });
   }
@@ -120,7 +136,12 @@ export async function createDraftOrderForQuote(careCase, shop) {
     shippingLine: shipping > 0
       ? { title: "Return shipping", price: shipping.toFixed(2) }
       : undefined,
-    taxExempt: !(Number(careCase.quoteTax || 0) > 0),
+    // Tax is now always carried as its own explicit line item above (when
+    // present) rather than left to Shopify's automatic calculation, so this
+    // must always be taxExempt: true — otherwise Shopify would calculate
+    // and add its OWN tax on top of the tax line we already itemized,
+    // double-charging the customer.
+    taxExempt: true,
     note: `Care request ${careCase.id}${careCase.shopifyOrderName ? ` (order ${careCase.shopifyOrderName})` : ""}${careCase.quoteNote ? ` — ${careCase.quoteNote}` : ""}`,
     customAttributes: [
       { key: "care_case_id", value: careCase.id },

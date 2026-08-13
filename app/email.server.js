@@ -64,6 +64,10 @@ function buildPlainTextEmail({ brandName, metaLine, greeting, paragraphs, ctaLab
 // considered series instead of four different-looking templates.
 function renderCareEmail({
   merchant,
+  // preheader is intentionally unused now — see note above the hidden-div
+  // removal below. Kept as an accepted (ignored) param so none of the six
+  // call sites below need to change.
+  // eslint-disable-next-line no-unused-vars
   preheader,
   metaLine,
   greeting,
@@ -84,13 +88,22 @@ function renderCareEmail({
     )
     .join("");
 
+  // Previously this template opened with a hidden preheader block
+  // (display:none; max-height:0; overflow:hidden; opacity:0) meant to
+  // control the inbox preview snippet. In practice Gmail was showing these
+  // emails with the real body collapsed behind a "•••" toggle that had to
+  // be clicked to reveal any writing — a hidden block of real sentence-like
+  // text sitting immediately before a short, sparse visible body is a
+  // well-documented trigger for Gmail's "trimmed content" heuristic
+  // (the same feature that collapses quoted reply chains). Dropped
+  // entirely rather than reworked: these emails are short enough that
+  // Gmail's own auto-generated snippet (first visible line) reads fine
+  // without it, and removing the hidden block removes the most likely
+  // cause of the collapse.
   const html = `
   <!DOCTYPE html>
   <html>
     <body style="margin:0; padding:0; background-color:#ffffff;">
-      <div style="display:none; max-height:0; overflow:hidden; opacity:0;">
-        ${preheader}
-      </div>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;">
         <tr>
           <td align="center" style="padding:64px 24px;">
