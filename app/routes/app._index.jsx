@@ -148,6 +148,103 @@ function TintedSection({ tint, children }) {
   );
 }
 
+// Same "Get started" checklist pattern as Digital Unboxing & COA Kit's
+// dashboard (app._index.jsx there) — a numbered Step with a Done/Step N
+// badge, a short description, and a CTA that either navigates (href) or
+// fires an action in place (onClick, used for "create a demo case" so the
+// merchant doesn't have to leave the page to try it).
+function Step({ done, number, title, description, href, onClick, ctaLabel, loading }) {
+  return (
+    <s-box padding="base" borderWidth="base" borderRadius="base">
+      <s-stack direction="inline" gap="base" alignItems="center" justifyContent="space-between">
+        <s-stack direction="inline" gap="base" alignItems="center">
+          <s-badge tone={done ? "success" : "neutral"}>{done ? "Done" : `Step ${number}`}</s-badge>
+          <s-stack direction="block" gap="none">
+            <s-text weight="bold">{title}</s-text>
+            <s-text tone="subdued">{description}</s-text>
+          </s-stack>
+        </s-stack>
+        {href ? (
+          <s-button href={href} variant={done ? "tertiary" : "primary"}>
+            {done ? "Review" : ctaLabel}
+          </s-button>
+        ) : (
+          <s-button
+            variant={done ? "tertiary" : "primary"}
+            onClick={onClick}
+            {...(loading ? { loading: true } : {})}
+          >
+            {done ? "Review" : ctaLabel}
+          </s-button>
+        )}
+      </s-stack>
+    </s-box>
+  );
+}
+
+function InfoRow({ title, children }) {
+  return (
+    <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+      <s-stack direction="block" gap="tight">
+        <s-text weight="bold">{title}</s-text>
+        <s-text tone="subdued">{children}</s-text>
+      </s-stack>
+    </s-box>
+  );
+}
+
+// Top-of-dashboard onboarding checklist. Collapses to a one-line "You're
+// all set up" once every step is done, same behaviour as COA's — no point
+// showing a three-step checklist forever once it's irrelevant. The demo
+// case step fires in place via fetcher rather than navigating, since
+// there's already a "Create a demo case" primary action doing exactly
+// that on this same page.
+function GetStartedSection({ merchant, catalogue, cases, onCreateDemoCase, creatingDemo }) {
+  const hasBranding = Boolean(merchant.brandName);
+  const hasCatalogue = catalogue.length > 0;
+  const hasCase = cases.length > 0;
+  const allDone = hasBranding && hasCatalogue && hasCase;
+
+  return (
+    <s-section heading={allDone ? "You're all set up" : "Three steps to get Care working for you"}>
+      {!allDone && (
+        <s-paragraph>
+          This should take about five minutes. Once all three are done, customers can request
+          repairs, cleaning, or returns themselves — branded to match your store, with quotes,
+          tracking, and payment built in.
+        </s-paragraph>
+      )}
+      <s-stack direction="block" gap="base">
+        <Step
+          done={hasBranding}
+          number={1}
+          title="Set up your branding"
+          description="Your brand name, colours, and support email — this fills in your customer request form, tracking page, and every email automatically."
+          href="/app/branding"
+          ctaLabel="Set up branding"
+        />
+        <Step
+          done={hasCatalogue}
+          number={2}
+          title="Build your service catalogue"
+          description="Add the repairs, cleaning, or maintenance services you offer, so customers can pick one when they submit a request."
+          href="/app/catalogue"
+          ctaLabel="Add services"
+        />
+        <Step
+          done={hasCase}
+          number={3}
+          title="Create your first case"
+          description="Try it with a demo case — no real customer needed — to see the tracking page and emails a customer would get."
+          onClick={onCreateDemoCase}
+          ctaLabel="Create a demo case"
+          loading={creatingDemo}
+        />
+      </s-stack>
+    </s-section>
+  );
+}
+
 // Picking a recent COA kit and sending that customer an invite email. Fully
 // separate from ManualEntrySection below — its own section, its own form,
 // its own accent color — so there's no shared/ambiguous state between "I'm
@@ -318,6 +415,8 @@ export default function Index() {
   const active = cases.filter((c) => c.status !== "completed" && c.status !== "declined");
   const completed = cases.filter((c) => c.status === "completed");
 
+  const isCreatingDemo = fetcher.state !== "idle" && fetcher.formData?.get("intent") === "create_test_case";
+
   return (
     <s-page heading="Care">
       <s-button
@@ -326,6 +425,39 @@ export default function Index() {
       >
         Create a demo case
       </s-button>
+
+      <GetStartedSection
+        merchant={merchant}
+        catalogue={catalogue}
+        cases={cases}
+        onCreateDemoCase={() => fetcher.submit({ intent: "create_test_case" }, { method: "POST" })}
+        creatingDemo={isCreatingDemo}
+      />
+
+      <s-section heading="What this app does">
+        <s-paragraph>
+          Care turns ad-hoc repair, cleaning, and maintenance requests into a structured
+          workflow. A customer submits a request (through your request link, or one you send
+          them directly), you send them a quote, they approve and pay through a real Shopify
+          order, and they can track progress the whole way through on a branded page — without a
+          single back-and-forth email.
+        </s-paragraph>
+      </s-section>
+
+      <s-section heading="Setting up & personalizing">
+        <s-stack direction="block" gap="tight">
+          <InfoRow title="Branding">
+            Set this once: your brand name, colours, and support email. Support email also
+            controls whether you get notified by email when a customer submits a new case —
+            leave it blank and Care just won't send that alert.
+          </InfoRow>
+          <InfoRow title="Service catalogue">
+            The list of services customers choose from on the request form — cleaning, repairs,
+            resizing, restoration, whatever fits your business. Customers can also pick "Not
+            sure — let us take a look" if nothing fits.
+          </InfoRow>
+        </s-stack>
+      </s-section>
 
       <RecentKitsSection recentKits={recentKits} />
 
