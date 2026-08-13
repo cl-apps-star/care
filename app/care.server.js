@@ -231,6 +231,26 @@ export async function createPayableOrderForCase(caseId, shop) {
   });
 }
 
+// ---- Invite links (personalized "start your request" links) -----------
+// See the CareInvite model comment in schema.prisma for why this exists —
+// short version: any query string on the invite link, even fully opaque,
+// was enough to get these emails collapsed in Gmail. Storing the prefill
+// server-side lets the email link to a clean /care/request/<token> path
+// with no query string, matching every other Care email link that's never
+// had the problem.
+export async function createCareInvite(merchantId, { customerEmail, customerName, orderNumber, productTitle }) {
+  return prisma.careInvite.create({
+    data: { merchantId, customerEmail, customerName, orderNumber, productTitle },
+  });
+}
+
+export async function getCareInviteByToken(token) {
+  return prisma.careInvite.findUnique({
+    where: { token },
+    include: { merchant: true },
+  });
+}
+
 export function caseIsAtFinalStage(careCase) {
     return isTerminal(careCase.status);
 }

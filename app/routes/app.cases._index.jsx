@@ -8,6 +8,7 @@ import {
   listCatalogue,
   createCareCase,
   advanceCase,
+  createCareInvite,
 } from "../care.server";
 import { stageLabel, statusTone, needsMerchantAction } from "../care-stages";
 import {
@@ -76,29 +77,23 @@ export const action = async ({ request }) => {
     const shopifyOrderName = (formData.get("shopifyOrderName") || "").toString().trim() || null;
     const productTitle = (formData.get("productTitle") || "").toString().trim() || null;
 
-    // Prefill data travels as ONE opaque base64url-encoded param instead of
-    // separate ?email=&name=&order= query params. Turned out to matter for
-    // more than tidiness: a raw customer email address sitting in a URL
-    // query string (…&email=someone%40example.com&name=...) is exactly the
-    // kind of pattern Gmail's link/content heuristics treat with
-    // suspicion — these invite emails were consistently landing collapsed
-    // behind a "•••" toggle in Gmail while every other Care email (whose
-    // links are short opaque tokens, e.g. /care/<token>) opened normally.
-    // Encoding it removes that literal PII-in-URL pattern. This is
-    // obfuscation, not encryption — treat it the same as the token links
-    // elsewhere in this app (not secret, just not human-readable).
-    const prefillPayload = {
-      email: customerEmail,
-      order: shopifyOrderName ? shopifyOrderName.replace(/^#/, "") : undefined,
-      name: customerName || undefined,
-      productTitle: productTitle || undefined,
-    };
-    const portalUrl = new URL("/care/request", appUrl);
-    portalUrl.searchParams.set("shop", session.shop);
-    portalUrl.searchParams.set(
-      "p",
-      Buffer.from(JSON.stringify(prefillPayload)).toString("base64url"),
-    );
+    // Prefill data is stored server-side (a CareInvite row) and the email
+    // links to a clean /care/request/<token> path with NO query string at
+    // all. This used to be a query string on the link — first readable
+    // params, then one opaque base64url-encoded param — and BOTH versions
+    // were enough to get these emails collapsed behind a "•••" toggle in
+    // Gmail, even with no readable PII in the encoded version. Every other
+    // Care email links to a clean path-only URL (e.g. /care/<token>) and
+    // none of those ever had the problem, so this now matches that pattern
+    // exactly rather than trying to make a query string "safe enough".
+    // See the CareInvite model in schema.prisma for more.
+    const invite = await createCareInvite(merchant.id, {
+      customerEmail,
+      customerName: customerName || null,
+      orderNumber: shopifyOrderName ? shopifyOrderName.replace(/^#/, "") : null,
+      productTitle: productTitle || null,
+    });
+    const portalUrl = `${appUrl}/care/request/${invite.token}`;
 
     await sendCareRequestInviteEmail({
       merchant,
@@ -106,7 +101,7 @@ export const action = async ({ request }) => {
       customerEmail,
       orderName: shopifyOrderName,
       productTitle,
-      portalUrl: portalUrl.toString(),
+      portalUrl,
     });
 
     return { ok: true, intent: "send_request_email" };

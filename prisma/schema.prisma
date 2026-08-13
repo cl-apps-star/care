@@ -57,6 +57,7 @@ model MerchantProfile {
 
   catalogueItems ServiceCatalogueItem[]
   cases          CareCase[]
+  invites        CareInvite[]
 }
 
 model ServiceCatalogueItem {
@@ -128,6 +129,29 @@ model CareCase {
   completedAt       DateTime?
 
   updates CareUpdate[]
+}
+
+// A personalized "start your request" invite sent from the merchant
+// dashboard (RecentKitsSection / ManualEntrySection on the Cases page).
+// Previously this prefill data (customer email/name/order/item) traveled
+// as a query string on the invite link — first in plain readable params,
+// then as one base64url-encoded param — but ANY query string on the link
+// turned out to be enough to get these emails collapsed behind a "•••"
+// toggle in Gmail, even with no readable PII in it. Every other Care email
+// links to a clean path-only URL (e.g. /care/<token>) and none of those
+// ever had the problem, so this stores the prefill server-side instead and
+// the email links to a clean /care/request/<token> path with no query
+// string at all, matching the pattern that's actually proven to work.
+model CareInvite {
+  id            String   @id @default(cuid())
+  token         String   @unique @default(cuid())
+  merchant      MerchantProfile @relation(fields: [merchantId], references: [id])
+  merchantId    String
+  customerEmail String
+  customerName  String?
+  orderNumber   String?
+  productTitle  String?
+  createdAt     DateTime @default(now())
 }
 
 model CareUpdate {
