@@ -25,24 +25,39 @@ export const loader = async ({ request }) => {
 
   // Personalized invite links (sent via sendCareRequestInviteEmail from the
   // merchant dashboard's "Start a case" section) carry the customer's
-  // order/email/name/item as query params, so they land straight on the
-  // details step already matched to their order instead of re-typing what
-  // the merchant already told us. A plain shared link (no `email` param)
-  // still works exactly as before — starts on the order-lookup step.
-  const prefillEmail = url.searchParams.get("email");
+  // order/email/name/item as a single opaque base64url-encoded `p` param,
+  // so they land straight on the details step already matched to their
+  // order instead of re-typing what the merchant already told us. A plain
+  // shared link (no `p` param) still works exactly as before — starts on
+  // the order-lookup step.
+  //
+  // This used to be separate ?email=&name=&order= query params, but a raw
+  // customer email sitting in cleartext in a URL turned out to be exactly
+  // the kind of pattern that gets these emails collapsed behind a "•••"
+  // toggle in Gmail — see app.cases._index.jsx's send_request_email intent
+  // for the full explanation. Encoding it into one opaque param fixed that.
+  const encodedPrefill = url.searchParams.get("p");
   let prefill = null;
-  if (prefillEmail) {
-    const prefillOrder = (url.searchParams.get("order") || "").trim();
-    const lookup = prefillOrder
-      ? await findOrderForCustomer({ shop, orderNumber: prefillOrder, email: prefillEmail })
-      : { found: false, reason: "not_found" };
-    prefill = {
-      lookup,
-      orderNumber: prefillOrder,
-      email: prefillEmail,
-      name: url.searchParams.get("name") || "",
-      productTitle: url.searchParams.get("productTitle") || "",
-    };
+  if (encodedPrefill) {
+    let decoded = null;
+    try {
+      decoded = JSON.parse(Buffer.from(encodedPrefill, "base64url").toString("utf8"));
+    } catch (err) {
+      console.warn("[CARE] Failed to decode invite prefill payload:", err);
+    }
+    if (decoded?.email) {
+      const prefillOrder = (decoded.order || "").trim();
+      const lookup = prefillOrder
+        ? await findOrderForCustomer({ shop, orderNumber: prefillOrder, email: decoded.email })
+        : { found: false, reason: "not_found" };
+      prefill = {
+        lookup,
+        orderNumber: prefillOrder,
+        email: decoded.email,
+        name: decoded.name || "",
+        productTitle: decoded.productTitle || "",
+      };
+    }
   }
 
   return { merchant, catalogue, shop, prefill };

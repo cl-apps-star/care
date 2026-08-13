@@ -76,12 +76,29 @@ export const action = async ({ request }) => {
     const shopifyOrderName = (formData.get("shopifyOrderName") || "").toString().trim() || null;
     const productTitle = (formData.get("productTitle") || "").toString().trim() || null;
 
+    // Prefill data travels as ONE opaque base64url-encoded param instead of
+    // separate ?email=&name=&order= query params. Turned out to matter for
+    // more than tidiness: a raw customer email address sitting in a URL
+    // query string (…&email=someone%40example.com&name=...) is exactly the
+    // kind of pattern Gmail's link/content heuristics treat with
+    // suspicion — these invite emails were consistently landing collapsed
+    // behind a "•••" toggle in Gmail while every other Care email (whose
+    // links are short opaque tokens, e.g. /care/<token>) opened normally.
+    // Encoding it removes that literal PII-in-URL pattern. This is
+    // obfuscation, not encryption — treat it the same as the token links
+    // elsewhere in this app (not secret, just not human-readable).
+    const prefillPayload = {
+      email: customerEmail,
+      order: shopifyOrderName ? shopifyOrderName.replace(/^#/, "") : undefined,
+      name: customerName || undefined,
+      productTitle: productTitle || undefined,
+    };
     const portalUrl = new URL("/care/request", appUrl);
     portalUrl.searchParams.set("shop", session.shop);
-    portalUrl.searchParams.set("email", customerEmail);
-    if (shopifyOrderName) portalUrl.searchParams.set("order", shopifyOrderName.replace(/^#/, ""));
-    if (customerName) portalUrl.searchParams.set("name", customerName);
-    if (productTitle) portalUrl.searchParams.set("productTitle", productTitle);
+    portalUrl.searchParams.set(
+      "p",
+      Buffer.from(JSON.stringify(prefillPayload)).toString("base64url"),
+    );
 
     await sendCareRequestInviteEmail({
       merchant,
