@@ -73,6 +73,11 @@ export const action = async ({ request, params }) => {
     if (!careCase) throw new Response("Not found", { status: 404 });
     const trackingUrl = `${appUrl}/care/${careCase.token}`;
 
+    // Every branch echoes back its own `intent` alongside `ok` — the page
+    // shares one fetcher across three separate forms (quote, advance,
+    // internal note), so the UI needs to know WHICH action just finished
+    // to show the right success banner in the right section, not just
+    // that "something" succeeded.
     if (intent === "set_and_send_quote") {
           await setQuote(careCase.id, {
                   labourCost: formData.get("labourCost") || 0,
@@ -83,7 +88,7 @@ export const action = async ({ request, params }) => {
           });
           const { case: updated } = await sendQuote(careCase.id);
           await sendQuoteEmail({ careCase: updated, merchant, trackingUrl });
-          return { ok: true };
+          return { ok: true, intent: "set_and_send_quote" };
     }
 
     if (intent === "advance") {
@@ -97,12 +102,12 @@ export const action = async ({ request, params }) => {
                             await sendStageUpdateEmail({ careCase: updated, merchant, trackingUrl, note });
                   }
           }
-          return { ok: true };
+          return { ok: true, intent: "advance", newStatus: updated.status };
     }
 
     if (intent === "internal_note") {
           await addInternalNote(careCase.id, formData.get("note"));
-          return { ok: true };
+          return { ok: true, intent: "internal_note" };
     }
 
     return { ok: false };
@@ -111,6 +116,14 @@ export const action = async ({ request, params }) => {
 export default function CaseDetail() {
     const { careCase } = useLoaderData();
     const fetcher = useFetcher();
+
+  // One fetcher, three forms — pendingIntent/resultIntent tell each form
+  // whether IT is the one currently submitting or the one that just
+  // finished, so "Send quote" doesn't show a spinner while "Add note" is
+  // actually the thing in flight, and the success banner lands under the
+  // right section instead of floating ambiguously at the top of the page.
+  const pendingIntent = fetcher.state !== "idle" ? fetcher.formData?.get("intent") : null;
+  const resultIntent = fetcher.state === "idle" && fetcher.data?.ok ? fetcher.data?.intent : null;
 
   return (
         <s-page heading={`${careCase.productTitle || "Case"} - ${careCase.serviceName}`} backAction={{ url: "/app/cases" }}>
@@ -129,6 +142,11 @@ export default function CaseDetail() {
 
               <s-section heading="Quote builder">
                 <TintedSection tint="quote">
+                      {resultIntent === "set_and_send_quote" && (
+                        <s-banner tone="success">
+                          <s-paragraph>Quote sent to the customer.</s-paragraph>
+                        </s-banner>
+                      )}
                       <form
                                   onSubmit={(e) => {
                                                 e.preventDefault();
@@ -143,7 +161,9 @@ export default function CaseDetail() {
                                             <s-text-field name="shippingCost" label="Return shipping" type="number" step="0.01" defaultValue={careCase.quoteShippingCost ?? ""} />
                                             <s-text-field name="tax" label="Tax" type="number" step="0.01" defaultValue={careCase.quoteTax ?? ""} />
                                             <s-text-area name="note" label="Note to customer" rows={4} defaultValue={careCase.quoteNote ?? ""} />
-                                            <s-button type="submit">Send quote</s-button>
+                                            <s-button type="submit" loading={pendingIntent === "set_and_send_quote" || undefined}>
+                                              {pendingIntent === "set_and_send_quote" ? "Sending…" : "Send quote"}
+                                            </s-button>
 
                                 </s-stack>
                       </form>
@@ -157,6 +177,14 @@ export default function CaseDetail() {
 
               <s-section heading="Advance stage">
                 <TintedSection tint="advance">
+                      {resultIntent === "advance" && (
+                        <s-banner tone="success">
+                          <s-paragraph>
+                            Moved to {stageLabel(fetcher.data?.newStatus)}
+                            {fetcher.data?.newStatus ? "." : " the next stage."}
+                          </s-paragraph>
+                        </s-banner>
+                      )}
                       <form
                                   onSubmit={(e) => {
                                                 e.preventDefault();
@@ -169,8 +197,8 @@ export default function CaseDetail() {
                                 <s-stack direction="block" gap="base">
                                             <s-text-field name="note" label="Update note (optional)" />
                                             <s-checkbox name="notify" label="Notify customer" defaultChecked />
-                                            <s-button type="submit">
-                                                          Advance to next stage
+                                            <s-button type="submit" loading={pendingIntent === "advance" || undefined}>
+                                                          {pendingIntent === "advance" ? "Advancing…" : "Advance to next stage"}
                                             </s-button>
 
                                 </s-stack>
@@ -195,6 +223,11 @@ export default function CaseDetail() {
               </s-section>
         
               <s-section slot="aside" heading="Internal note">
+                      {resultIntent === "internal_note" && (
+                        <s-banner tone="success">
+                          <s-paragraph>Note added.</s-paragraph>
+                        </s-banner>
+                      )}
                       <form
                                   onSubmit={(e) => {
                                                 e.preventDefault();
@@ -206,8 +239,10 @@ export default function CaseDetail() {
                                 >
                                 <s-stack direction="block" gap="base">
                                             <s-text-field name="note" label="Note (not shown to customer)" />
-                                            <s-button type="submit" variant="tertiary">Add note</s-button>
-                                
+                                            <s-button type="submit" variant="tertiary" loading={pendingIntent === "internal_note" || undefined}>
+                                              {pendingIntent === "internal_note" ? "Adding…" : "Add note"}
+                                            </s-button>
+
                                 </s-stack>
                       </form>
               </s-section>
