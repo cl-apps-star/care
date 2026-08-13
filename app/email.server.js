@@ -6,7 +6,14 @@ import { sendTransactionalEmail } from "./emailProviders.server";
 // Reveal:        certificates@cl-apps.net
 // In the Making: updates@cl-apps.net
 // Care:          care@cl-apps.net
-const REPLY_TO = "hello@cl-apps.net";
+//
+// FALLBACK_REPLY_TO is only used when a merchant hasn't set a support
+// email in Branding yet — it must never be the only reply-to address in
+// practice, since every merchant's customers would otherwise end up
+// replying straight to CL Apps instead of to that merchant. Each send()
+// call below prefers merchant.supportEmail; this is just what happens if
+// that's blank.
+const FALLBACK_REPLY_TO = "hello@cl-apps.net";
 
 function brandBlock(merchant) {
   const name = (merchant?.brandName || "Our studio").trim();
@@ -171,14 +178,18 @@ function renderCareEmail({
   return { html, text, fromName: brand.name };
 }
 
-async function send({ fromName, to, subject, html, text }) {
+async function send({ fromName, to, subject, html, text, merchant }) {
   if (!to) {
     return { skipped: true, reason: "No customer email on file." };
   }
   return sendTransactionalEmail({
     from: `${fromName} <care@cl-apps.net>`,
     to,
-    replyTo: REPLY_TO,
+    // Reply to THIS merchant's own support address if they've set one in
+    // Branding — a customer hitting "reply" should reach the store they
+    // actually bought from, not CL Apps. Only falls back to CL Apps' own
+    // inbox when the merchant hasn't configured a support email yet.
+    replyTo: merchant?.supportEmail || FALLBACK_REPLY_TO,
     subject,
     html,
     text,
@@ -206,6 +217,7 @@ export async function sendCaseReceivedEmail({ careCase, merchant, trackingUrl })
   });
   return send({
     fromName,
+    merchant,
     to: careCase.customerEmail,
     subject: `We've received your care request`,
     html,
@@ -245,6 +257,7 @@ export async function sendCareRequestInviteEmail({
   });
   return send({
     fromName,
+    merchant,
     to: customerEmail,
     subject: `Need a repair or return on ${piece}?`,
     html,
@@ -286,6 +299,7 @@ export async function sendNewCaseAlertEmail({ careCase, merchant, adminUrl }) {
   });
   const result = await send({
     fromName,
+    merchant,
     to: merchant.supportEmail,
     subject: `New care request from ${careCase.customerName || "a customer"}`,
     html,
@@ -318,6 +332,7 @@ export async function sendQuoteEmail({ careCase, merchant, trackingUrl }) {
   });
   return send({
     fromName,
+    merchant,
     to: careCase.customerEmail,
     subject: `Your quote is ready`,
     html,
@@ -344,6 +359,7 @@ export async function sendStageUpdateEmail({ careCase, merchant, trackingUrl, no
   });
   return send({
     fromName,
+    merchant,
     to: careCase.customerEmail,
     subject: `Update on your care request: ${label}`,
     html,
@@ -366,6 +382,7 @@ export async function sendReadyToReturnEmail({ careCase, merchant, trackingUrl }
   });
   return send({
     fromName,
+    merchant,
     to: careCase.customerEmail,
     subject: `Your piece is ready`,
     html,

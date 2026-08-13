@@ -113,7 +113,7 @@ export default function CaseDetail() {
     const fetcher = useFetcher();
 
   return (
-        <s-page heading={`${careCase.productTitle || "Case"} - ${careCase.serviceName}`} backAction={{ url: "/app" }}>
+        <s-page heading={`${careCase.productTitle || "Case"} - ${careCase.serviceName}`} backAction={{ url: "/app/cases" }}>
                 <s-section heading="Overview">
                         <TintedSection tint="overview">
                           <OverviewRow label="Customer">{careCase.customerName} ({careCase.customerEmail})</OverviewRow>
@@ -142,7 +142,7 @@ export default function CaseDetail() {
                                             <s-text-field name="partsCost" label="Parts cost" type="number" step="0.01" defaultValue={careCase.quotePartsCost ?? ""} />
                                             <s-text-field name="shippingCost" label="Return shipping" type="number" step="0.01" defaultValue={careCase.quoteShippingCost ?? ""} />
                                             <s-text-field name="tax" label="Tax" type="number" step="0.01" defaultValue={careCase.quoteTax ?? ""} />
-                                            <s-text-field name="note" label="Note to customer" defaultValue={careCase.quoteNote ?? ""} />
+                                            <s-text-area name="note" label="Note to customer" rows={4} defaultValue={careCase.quoteNote ?? ""} />
                                             <s-button type="submit">Send quote</s-button>
 
                                 </s-stack>
