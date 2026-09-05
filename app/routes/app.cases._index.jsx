@@ -418,38 +418,6 @@ export default function CasesIndex() {
 
         <div className={styles.caseSections}>
 
-      {/* Everything to do with STARTING a case lives under this one heading —
-          previously these were three separate top-level sections (recent
-          kits, request link, manual entry), which read as unrelated blocks
-          rather than three ways to do the same thing. Grouping them makes
-          "open a new case" one clear place, distinct from "active cases"
-          below. */}
-      <div id="start-a-case">
-      <s-section heading="Start a case">
-        <s-stack direction="block" gap="large">
-          <PlanUsageBanner planSummary={planSummary} />
-
-          <RecentKitsSection recentKits={recentKits} />
-
-          <s-stack direction="block" gap="base">
-            <s-text weight="bold">Your customer request link</s-text>
-            <TintedSection tint="link">
-              <s-paragraph>
-                Share this link anywhere your customers need it — your order confirmation email,
-                thank you page, or product page — so they can request a repair, cleaning, or
-                return themselves. Every submission lands here as a new case.
-              </s-paragraph>
-              <s-box padding="base" borderWidth="base" borderRadius="base">
-                <s-text>{requestLink}</s-text>
-              </s-box>
-            </TintedSection>
-          </s-stack>
-
-          <ManualEntrySection />
-        </s-stack>
-      </s-section>
-      </div>
-
       {catalogue.length === 0 && (
         <s-section heading="Set up your service catalogue">
           <s-paragraph>
@@ -498,6 +466,31 @@ export default function CasesIndex() {
           <s-paragraph>Completed cases will show up here once you close one out.</s-paragraph>
         )}
       </s-section>
+
+      {/* Daily work stays above setup/creation tools. These three ways to
+          begin a request remain grouped together, but no longer push the
+          cases that need attention below a long form. */}
+      <div id="start-a-case">
+        <s-section heading="Start a case">
+          <s-stack direction="block" gap="large">
+            <PlanUsageBanner planSummary={planSummary} />
+            <RecentKitsSection recentKits={recentKits} />
+            <s-stack direction="block" gap="base">
+              <s-text weight="bold">Your customer request link</s-text>
+              <TintedSection tint="link">
+                <s-paragraph>
+                  Share this link anywhere customers need it — your order confirmation, thank you
+                  page, or product page. Every submission lands here as a new case.
+                </s-paragraph>
+                <s-box padding="base" borderWidth="base" borderRadius="base">
+                  <s-text>{requestLink}</s-text>
+                </s-box>
+              </TintedSection>
+            </s-stack>
+            <ManualEntrySection />
+          </s-stack>
+        </s-section>
+      </div>
 
       <s-section slot="aside" heading="Service catalogue">
         <s-paragraph>{catalogue.length} active service(s).</s-paragraph>
