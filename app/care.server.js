@@ -1,6 +1,5 @@
 import prisma from "./db.server";
 import { DEFAULT_CARE_STAGES, nextStage, isTerminal } from "./care-stages";
-import { createDraftOrderForQuote } from "./care-payment.server";
 
 // ---- Merchant profile / branding ----------------------------------------
 
@@ -157,9 +156,7 @@ export async function addInternalNote(caseId, note) {
 // It's calculated here off the subtotal (labour + parts + shipping) and
 // stored two ways: quoteTaxPercent (what the merchant typed, so the form
 // shows it back correctly if they reopen/edit the quote) and quoteTax
-// (the resulting CASH amount — everything downstream, the customer's quote
-// breakdown, the Shopify draft order line item in care-payment.server.js,
-// still reads a real currency amount, not a percent).
+// (the resulting CASH amount used by the customer's quote breakdown).
 export async function setQuote(caseId, { labourCost = 0, partsCost = 0, shippingCost = 0, taxPercent = 0, note, currency = "GBP" }) {
     // Guard every field against blank/malformed input producing NaN — a NaN
     // quoteTotal gets silently written as NULL by Postgres, which used to
@@ -198,13 +195,11 @@ export async function sendQuote(caseId) {
 }
 
 export async function approveQuote(caseId) {
-    const updated = await advanceCase(caseId, {
+    return advanceCase(caseId, {
           status: "approved",
           note: "Customer approved the quote.",
           notifyCustomer: true,
     });
-    await prisma.careCase.update({ where: { id: caseId }, data: { paymentStatus: "unpaid" } });
-    return updated;
 }
 
 export async function declineQuote(caseId) {
@@ -213,33 +208,6 @@ export async function declineQuote(caseId) {
           note: "Customer declined the quote.",
           notifyCustomer: true,
     });
-}
-
-export async function markPaid(caseId, shopifyOrderIdForPayment) {
-    return prisma.careCase.update({
-          where: { id: caseId },
-          data: { paymentStatus: "paid", shopifyOrderIdForPayment },
-    });
-}
-
-// Called right after approveQuote() — creates the real, payable Shopify
-// draft order for the case's quote and stores its invoice link so the
-// customer tracking page can show a working "Pay now" button. Separate
-// from markPaid(), which only fires later once the customer actually
-// completes payment (see app/routes/webhooks.orders.create.jsx).
-export async function createPayableOrderForCase(caseId, shop) {
-    const careCase = await prisma.careCase.findUnique({ where: { id: caseId } });
-    if (!careCase) throw new Error("Case not found");
-
-  const { draftOrderId, invoiceUrl } = await createDraftOrderForQuote(careCase, shop);
-
-  return prisma.careCase.update({
-        where: { id: caseId },
-        data: {
-                shopifyDraftOrderId: draftOrderId,
-                shopifyInvoiceUrl: invoiceUrl,
-        },
-  });
 }
 
 // ---- Invite links (personalized "start your request" links) -----------

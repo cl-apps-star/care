@@ -1,6 +1,6 @@
 import { useFetcher, useLoaderData } from "react-router";
 import prisma from "../db.server";
-import { getCaseByToken, approveQuote, declineQuote, createPayableOrderForCase } from "../care.server";
+import { getCaseByToken, approveQuote, declineQuote } from "../care.server";
 import { stageLabel } from "../care-stages";
 import { sendStageUpdateEmail, sendQuoteApprovedAlertEmail } from "../email.server";
 
@@ -24,26 +24,11 @@ export const action = async ({ request, params }) => {
     const { case: updated } = await approveQuote(careCase.id);
     const merchant = await prisma.merchantProfile.findUnique({ where: { id: updated.merchantId } });
 
-    // Turn the approved quote into a real, payable Shopify draft order.
-    // If this fails (network blip, Shopify API hiccup), the quote is
-    // still approved — the merchant can see it in the dashboard and
-    // retry or take payment another way. A payment-link failure should
-    // never silently block the approval itself.
-    let invoiceUrl = null;
-    try {
-      const withOrder = await createPayableOrderForCase(updated.id, merchant.shop);
-      invoiceUrl = withOrder.shopifyInvoiceUrl;
-    } catch (err) {
-      console.error(`[CARE] Failed to create draft order for case ${updated.id}:`, err);
-    }
-
     await sendStageUpdateEmail({
       careCase: updated,
       merchant,
       trackingUrl,
-      note: invoiceUrl
-        ? "Thanks — we'll get started. You can complete payment any time from your tracking page."
-        : "Thanks — we'll get started.",
+      note: "Thanks — we'll get started.",
     });
 
     // Let the merchant know too — approving a quote is the signal to
@@ -58,7 +43,7 @@ export const action = async ({ request, params }) => {
       console.error(`[CARE] Failed to send quote-approved alert for case ${updated.id}:`, err);
     }
 
-    return { ok: true, invoiceUrl };
+    return { ok: true };
   }
 
   if (intent === "decline_quote" && careCase.status === "quote_sent") {
@@ -72,10 +57,8 @@ export const action = async ({ request, params }) => {
 // Line-item breakdown of the quote — only shows costs the merchant actually
 // entered in the Quote builder; anything left blank (or 0) is skipped
 // entirely rather than showing as a zero line, per the merchant's request.
-// Mirrors exactly what's itemized on the real Shopify invoice
-// (care-payment.server.js's createDraftOrderForQuote), so the customer sees
-// the same breakdown on the tracking page as on what they're actually
-// charged.
+// Shows the customer the same itemized costs the merchant entered in the
+// quote builder before they approve or decline the work.
 function QuoteBreakdown({ careCase }) {
   const currency = careCase.quoteCurrency || "GBP";
   const rows = [
@@ -206,15 +189,6 @@ export default function CareTrackingPage() {
           background: transparent; color: #7d7a72; border-color: #d9d4c9;
         }
         .care-btn:disabled { opacity: 0.6; cursor: default; }
-        .care-pay {
-          display: block; text-align: center; text-decoration: none;
-          box-sizing: border-box;
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-          font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase;
-          padding: 13px 18px; border: 1px solid var(--accent);
-          color: #fff; background: var(--accent);
-          margin-bottom: 32px;
-        }
         .care-declined {
           font-size: 14px; line-height: 1.7; color: #565349;
           background: #faf8f4; border: 1px solid #e4e0d8;
@@ -293,22 +267,6 @@ export default function CareTrackingPage() {
             </div>
           </div>
         )}
-
-        {careCase.status === "approved" &&
-          careCase.shopifyInvoiceUrl &&
-          careCase.paymentStatus !== "paid" && (
-            <div className="care-quote">
-              <h3>
-                {careCase.quoteTotal != null
-                  ? <>Amount due: {careCase.quoteCurrency || "GBP"} {careCase.quoteTotal.toFixed(2)}</>
-                  : "Ready for payment"}
-              </h3>
-              <QuoteBreakdown careCase={careCase} />
-              <a href={careCase.shopifyInvoiceUrl} className="care-pay" style={{ marginTop: 18, marginBottom: 0 }}>
-                Pay for your repair
-              </a>
-            </div>
-          )}
 
         {careCase.status === "declined" && (
           <div className="care-declined">

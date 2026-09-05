@@ -116,10 +116,12 @@ model CareCase {
   quoteApprovedAt   DateTime?
   quoteDeclinedAt   DateTime?
 
-  paymentStatus     String   @default("unpaid")
-  shopifyOrderIdForPayment String?
-  shopifyDraftOrderId String?
-  shopifyInvoiceUrl   String?
+  // Legacy fields retained so existing production records remain intact.
+  // Care no longer creates payable orders or exposes payment links.
+  paymentStatus             String  @default("unpaid")
+  shopifyOrderIdForPayment  String?
+  shopifyDraftOrderId       String?
+  shopifyInvoiceUrl         String?
 
   warrantyClaim     Boolean  @default(false)
 

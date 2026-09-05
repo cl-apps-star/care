@@ -8,9 +8,7 @@ embedded = true
 
 [access_scopes]
 # read_orders/read_products so a case can show order + product context.
-# write_draft_orders added so an approved quote can become a real,
-# payable Shopify draft order (see app/care-payment.server.js).
-scopes = "read_products,read_orders,write_draft_orders"
+scopes = "read_products,read_orders"
 
 [webhooks]
 api_version = "2025-10"
@@ -50,20 +48,9 @@ api_version = "2025-10"
       uri = "/webhooks/app_subscriptions/update"
         topics = ["app_subscriptions/update"]
 
-  # orders/create webhook deliberately NOT registered yet — Shopify blocks
-  # deploying it until this app has approved "protected customer data"
-  # access (orders/create includes customer name/email/address). The
-  # handler already exists (app/routes/webhooks.orders.create.jsx) and is
-  # ready to register the moment that access is approved; see the request
-  # process at https://shopify.dev/docs/apps/launch/protected-customer-data.
-  # Until then, a merchant marks a case paid manually after checking the
-  # order in Shopify admin — the draft-order payment link itself works
-  # today regardless.
-
 [auth]
 # Token-exchange auth (matches shopify.server.js's authPathPrefix) means
 # this isn't actually used at runtime, but the CLI's config schema
 # requires the field to be present regardless — same as In the Making's
 # working config.
 redirect_urls = [ "https://care-production-2b71.up.railway.app/api/auth" ]
-

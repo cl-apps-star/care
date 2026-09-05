@@ -74,9 +74,7 @@ function statusGuidance(careCase) {
     case "quote_sent":
       return "Waiting on the customer to approve or decline the quote you sent.";
     case "approved":
-      return careCase.paymentStatus === "paid"
-        ? "Customer approved and paid — get started on the work."
-        : "Customer approved the quote. Payment is still outstanding, but you can start the work whenever suits.";
+      return "Customer approved the quote — get started on the work when you're ready.";
     case "in_service":
       return "Work is in progress.";
     case "quality_check":

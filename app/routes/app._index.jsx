@@ -107,7 +107,7 @@ function GetStartedSection({ merchant, catalogue, cases, onCreateDemoCase, creat
         <s-paragraph>
           This should take about five minutes. Once all three are done, customers can request
           repairs, cleaning, or returns themselves — branded to match your store, with quotes,
-          tracking, and payment built in.
+          approvals, and progress tracking built in.
         </s-paragraph>
       )}
       <s-stack direction="block" gap="base">
@@ -164,8 +164,8 @@ export default function Index() {
         <s-paragraph>
           Care turns ad-hoc repair, cleaning, and maintenance requests into a structured
           workflow. A customer submits a request (through your request link, or one you send
-          them directly), you send them a quote, they approve and pay through a real Shopify
-          order, and they can track progress the whole way through on a branded page — without a
+          them directly), you send them a quote, they approve or decline it, and they can track
+          progress the whole way through on a branded page — without a
           single back-and-forth email.
         </s-paragraph>
       </s-section>

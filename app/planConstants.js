@@ -14,7 +14,7 @@
 //
 // Pricing set 2026-08-11 after a competitor pass on comparable Shopify
 // repair/service-tracking apps: RepairTracker (closest feature match —
-// quotes, tracking, draft-order payment) prices its Pro tier at $29/mo;
+// quotes and tracking) prices its Pro tier at $29/mo;
 // Unified Repairs Support undercuts at $14.99/mo with a lighter feature
 // set. $19/mo was chosen to sit between the two — priced above the
 // bare-bones competitor but below the most feature-comparable one, since

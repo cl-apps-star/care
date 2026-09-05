@@ -325,10 +325,9 @@ export async function sendNewCaseAlertEmail({ careCase, merchant, adminUrl }) {
 // Sent to the MERCHANT's own inbox the moment a customer approves a quote —
 // same "merchant needs to know without having the dashboard open" reasoning
 // as sendNewCaseAlertEmail above. Approving a quote is the signal to
-// actually start the work (and, once payment clears, ship it), so a
-// merchant missing this notification could sit on an approved, paid-for
-// repair without realizing it's time to begin. Same tolerant skip-if-blank
-// pattern as the other merchant-facing alert.
+// actually start the work, so a merchant missing this notification could
+// leave an approved repair waiting without realizing it's time to begin.
+// Same tolerant skip-if-blank pattern as the other merchant-facing alert.
 export async function sendQuoteApprovedAlertEmail({ careCase, merchant, adminUrl }) {
   if (!merchant?.supportEmail) {
     console.warn(

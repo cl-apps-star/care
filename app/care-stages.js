@@ -69,9 +69,8 @@ export function needsMerchantAction(careCase) {
     case "ready_to_return":
       return true;
     case "approved":
-      // Approved-and-unpaid still needs the merchant to actually start the
-      // work; approved-and-paid is arguably still "start the work" too, so
-      // treat both as needing action until it's moved past "approved".
+      // Approval is the merchant's signal to start the work, so keep it
+      // surfaced until the case moves into service.
       return true;
     default:
       return false;
