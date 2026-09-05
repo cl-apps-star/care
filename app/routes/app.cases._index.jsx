@@ -20,6 +20,7 @@ import {
 import { getRecentCoaKits } from "../coa-lookup.server";
 import { getPlanSummary } from "../plan.server";
 import { FREE_CASE_LIMIT } from "../planConstants";
+import styles from "../styles/care-admin.module.css";
 
 // Split out of the old app._index.jsx (which is now just the getting-
 // started overview at /app) so "here's how Care works" and "here are my
@@ -385,7 +386,6 @@ function ManualEntrySection() {
 
 export default function CasesIndex() {
   const { merchant, cases, catalogue, requestLink, recentKits, planSummary } = useLoaderData();
-  const fetcher = useFetcher();
 
   // Cases actually waiting on the merchant (a new request, an item that
   // just arrived, a quote to build, a stage to advance) surface first —
@@ -396,15 +396,27 @@ export default function CasesIndex() {
     .filter((c) => c.status !== "completed" && c.status !== "declined")
     .sort((a, b) => Number(needsMerchantAction(b)) - Number(needsMerchantAction(a)));
   const completed = cases.filter((c) => c.status === "completed");
+  const needingAttention = active.filter(needsMerchantAction).length;
 
   return (
-    <s-page heading="Cases" backAction={{ url: "/app" }}>
-      <s-button
-        slot="primary-action"
-        onClick={() => fetcher.submit({ intent: "create_test_case" }, { method: "POST" })}
-      >
-        Create a demo case
-      </s-button>
+    <s-page heading="Cases" backAction={{ url: "/app" }} inlineSize="large">
+      <div className={`${styles.shell} ${styles.caseShell}`}>
+        <header className={styles.hero}>
+          <div>
+            <p className={styles.eyebrow}>Customer care</p>
+            <h1>Know what needs you next</h1>
+            <p className={styles.lede}>Open, update and complete every customer request from one place.</p>
+          </div>
+          <a className={styles.primaryLink} href="#start-a-case">Start a case</a>
+        </header>
+
+        <div className={styles.stats}>
+          <div className={styles.stat}><strong>{needingAttention}</strong><span>Need your attention</span></div>
+          <div className={styles.stat}><strong>{active.length}</strong><span>In progress</span></div>
+          <div className={styles.stat}><strong>{completed.length}</strong><span>Completed</span></div>
+        </div>
+
+        <div className={styles.caseSections}>
 
       {/* Everything to do with STARTING a case lives under this one heading —
           previously these were three separate top-level sections (recent
@@ -412,7 +424,8 @@ export default function CasesIndex() {
           rather than three ways to do the same thing. Grouping them makes
           "open a new case" one clear place, distinct from "active cases"
           below. */}
-      <s-section heading="Open a new case">
+      <div id="start-a-case">
+      <s-section heading="Start a case">
         <s-stack direction="block" gap="large">
           <PlanUsageBanner planSummary={planSummary} />
 
@@ -435,6 +448,7 @@ export default function CasesIndex() {
           <ManualEntrySection />
         </s-stack>
       </s-section>
+      </div>
 
       {catalogue.length === 0 && (
         <s-section heading="Set up your service catalogue">
@@ -494,6 +508,8 @@ export default function CasesIndex() {
         <s-paragraph>{merchant.brandName || "Not set yet"}</s-paragraph>
         <s-link href="/app/branding">Edit branding</s-link>
       </s-section>
+        </div>
+      </div>
     </s-page>
   );
 }

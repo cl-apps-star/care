@@ -8,6 +8,7 @@ import {
   updateCatalogueItem,
   deleteCatalogueItem,
 } from "../care.server";
+import styles from "../styles/care-admin.module.css";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
@@ -55,12 +56,19 @@ export default function Catalogue() {
   const submit = (data) => fetcher.submit(data, { method: "POST" });
 
   return (
-    <s-page heading="Service catalogue" backAction={{ url: "/app" }}>
-      <s-section heading="Add a service">
-        <s-paragraph>
-          These are the services customers can choose from when they submit a request — add as
-          many as you offer.
-        </s-paragraph>
+    <s-page heading="Services & pricing" backAction={{ url: "/app" }} inlineSize="large">
+      <div className={styles.shell}>
+        <header className={styles.hero}>
+          <div>
+            <p className={styles.eyebrow}>Your service menu</p>
+            <h1>Make choosing help feel simple</h1>
+            <p className={styles.lede}>Add the repairs, cleaning or maintenance your customers can request.</p>
+          </div>
+        </header>
+
+        <div className={styles.catalogueLayout}>
+          <section className={styles.formPanel}>
+            <div className={styles.cardHeader}><div><p className={styles.eyebrow}>Add new</p><h2>A service</h2></div></div>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -70,38 +78,41 @@ export default function Catalogue() {
             e.currentTarget.reset();
           }}
         >
-          <s-stack direction="block" gap="base">
+          <div className={styles.formGrid}>
             <s-text-field name="name" label="Service name" placeholder="e.g. Ring resizing" required />
-            <s-text-field name="description" label="Description" placeholder="What this service covers" />
+            <s-text-field name="description" label="Short description (optional)" placeholder="What this service covers" />
             <s-select name="pricingType" label="Pricing type">
               <s-option value="fixed">Fixed price</s-option>
               <s-option value="starting_from">Starting from</s-option>
               <s-option value="inspection_required">Inspection required (quote later)</s-option>
               <s-option value="free">Free</s-option>
             </s-select>
-            <s-text-field name="price" label="Price (leave blank for inspection-required services)" type="number" step="0.01" />
+            <s-text-field name="price" label="Price (optional)" type="number" step="0.01" />
             <s-checkbox name="requiresPhoto" label="Require a photo on request" defaultChecked />
             <s-button type="submit">Add service</s-button>
-          </s-stack>
+          </div>
         </form>
-      </s-section>
+          </section>
 
-      <s-section heading={`Services (${catalogue.length})`}>
-        <s-stack direction="block" gap="base">
+          <section className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div><p className={styles.eyebrow}>Customer choices</p><h2>Your services</h2></div>
+              <span>{catalogue.length}</span>
+            </div>
+            <div className={styles.serviceList}>
           {catalogue.map((item) => (
-            <s-box key={item.id} padding="base" borderWidth="base" borderRadius="base">
-              <s-stack direction="inline" gap="base" alignItems="center">
-                <s-stack direction="block" gap="tight">
-                  <s-text weight="bold">{item.name}</s-text>
-                  <s-text tone="subdued">
+            <div key={item.id} className={`${styles.serviceRow} ${!item.active ? styles.serviceMuted : ""}`}>
+              <div>
+                  <strong>{item.name}</strong>
+                  <small>
                     {item.pricingType === "inspection_required"
                       ? "Quote after inspection"
                       : item.pricingType === "free"
                         ? "Free"
                         : `${item.pricingType === "starting_from" ? "From " : ""}${item.currency} ${item.price ?? "—"}`}
-                  </s-text>
+                  </small>
                   {!item.active && <s-badge tone="subdued">Inactive</s-badge>}
-                </s-stack>
+              </div>
                 <s-button
                   variant="tertiary"
                   onClick={() =>
@@ -110,12 +121,13 @@ export default function Catalogue() {
                 >
                   {item.active ? "Deactivate" : "Activate"}
                 </s-button>
-              </s-stack>
-            </s-box>
+            </div>
           ))}
-          {catalogue.length === 0 && <s-paragraph>No services yet — add your first above.</s-paragraph>}
-        </s-stack>
-      </s-section>
+          {catalogue.length === 0 && <div className={styles.empty}>Your first service will appear here.</div>}
+            </div>
+          </section>
+        </div>
+      </div>
     </s-page>
   );
 }

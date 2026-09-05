@@ -6,6 +6,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getPlanSummary } from "../plan.server";
 import { FREE_CASE_LIMIT, STUDIO_PLAN, STUDIO_PLAN_PRICE } from "../planConstants";
+import styles from "../styles/care-admin.module.css";
 
 export const loader = async ({ request }) => {
   const { billing, session } = await authenticate.admin(request);
@@ -84,55 +85,51 @@ export default function BillingPage() {
   const goToUpgrade = () => navigate(`/app/billing/upgrade?plan=studio`);
 
   return (
-    <s-page heading="Billing">
-      <s-section heading="Your plan">
-        <s-stack direction="block" gap="base">
-          <s-badge tone={currentPlan === "free" ? "neutral" : "success"}>
-            {currentPlan === "studio" ? "Studio plan" : "Free plan"}
-          </s-badge>
+    <s-page heading="Billing" inlineSize="large">
+      <div className={`${styles.shell} ${styles.billingShell}`}>
+        <header className={styles.hero}>
+          <div>
+            <p className={styles.eyebrow}>Plan & usage</p>
+            <h1>Choose the pace that fits</h1>
+            <p className={styles.lede}>Every plan includes the full branded customer experience.</p>
+          </div>
+        </header>
 
-          {currentPlan === "studio" ? (
-            <s-paragraph>
-              {data.planSummary?.count ?? 0} case{data.planSummary?.count === 1 ? "" : "s"} started
-              this month. Studio has no monthly cap.
-            </s-paragraph>
-          ) : (
-            <s-paragraph>
-              {data.planSummary?.count ?? 0} of {FREE_CASE_LIMIT} free cases used this month. Every
-              case — kit pick, manual entry, or the shared link — works the same on the free plan;
-              Studio just removes the monthly cap.
-            </s-paragraph>
-          )}
+        <section className={styles.currentPlan}>
+          <div>
+            <span className={styles.currentPlanLabel}>Your plan</span>
+            <h2>{currentPlan === "studio" ? "Studio" : "Free"}</h2>
+            <p>{currentPlan === "studio" ? "Unlimited cases, with every Care feature included." : `${data.planSummary?.count ?? 0} of ${FREE_CASE_LIMIT} cases used this month.`}</p>
+          </div>
+          <div className={styles.usageMark}>
+            <strong>{currentPlan === "studio" ? "∞" : Math.max(0, FREE_CASE_LIMIT - (data.planSummary?.count ?? 0))}</strong>
+            <span>{currentPlan === "studio" ? "unlimited" : "remaining"}</span>
+          </div>
+        </section>
 
-          {currentPlan === "studio" && (
-            <s-button variant="tertiary" tone="critical" onClick={cancel} {...(isBusy ? { loading: true } : {})}>
-              Cancel subscription
-            </s-button>
-          )}
-        </s-stack>
-      </s-section>
-
-      {currentPlan === "free" && (
-        <s-section heading="Upgrade">
-          <s-box padding="base" borderWidth="base" borderRadius="base">
-            <s-stack direction="block" gap="tight">
-              <s-text fontWeight="medium">Studio — ${STUDIO_PLAN_PRICE}/month</s-text>
-              <s-text tone="subdued">Unlimited cases a month, no other changes to how Care works.</s-text>
-              <s-box paddingBlockStart="tight">
-                <s-button onClick={goToUpgrade}>Upgrade to Studio</s-button>
-              </s-box>
-            </s-stack>
-          </s-box>
-        </s-section>
-      )}
-
-      <s-section slot="aside" heading="Why this matters">
-        <s-paragraph>
-          The free plan is genuinely usable for a few requests a month — every case still gets the
-          full branded flow. Studio is for shops with steady monthly volume who don't want to think
-          about a cap.
-        </s-paragraph>
-      </s-section>
+        {currentPlan === "free" ? (
+          <section className={styles.planSection}>
+            <div className={styles.sectionHeading}>
+              <p className={styles.eyebrow}>More room</p>
+              <h2>Studio</h2>
+              <p>Upgrade when customer care becomes a regular part of your month.</p>
+            </div>
+            <article className={styles.planCard}>
+              <div className={styles.planName}>
+                <h3>Studio</h3>
+                <p><strong>${STUDIO_PLAN_PRICE}</strong><span>/month</span></p>
+              </div>
+              <p>Unlimited cases. No change to your branding, workflow or customer experience.</p>
+              <button type="button" onClick={goToUpgrade}>Upgrade to Studio</button>
+            </article>
+          </section>
+        ) : hasActivePayment ? (
+          <div className={styles.cancelRow}>
+            <span>You can return to the free plan at any time.</span>
+            <button type="button" onClick={cancel} disabled={isBusy}>{isBusy ? "Cancelling…" : "Cancel subscription"}</button>
+          </div>
+        ) : null}
+      </div>
     </s-page>
   );
 }

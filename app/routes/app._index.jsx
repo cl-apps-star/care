@@ -1,8 +1,10 @@
-import { useFetcher, useLoaderData } from "react-router";
+import { Link, useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { getOrCreateMerchantProfile, listCasesForMerchant, listCatalogue, createCareCase } from "../care.server";
 import { sendCaseReceivedEmail } from "../email.server";
+import { needsMerchantAction } from "../care-stages";
+import styles from "../styles/care-admin.module.css";
 
 // Home is now just the overview: getting-started checklist + explainer.
 // Everything about actually working cases (starting one, the active/
@@ -53,42 +55,22 @@ export const action = async ({ request }) => {
 // in place (onClick, used for "create a demo case" so the merchant
 // doesn't have to leave the page to try it).
 function Step({ done, number, title, description, href, onClick, ctaLabel, loading }) {
-  return (
-    <s-box padding="base" borderWidth="base" borderRadius="base">
-      <s-stack direction="inline" gap="base" alignItems="center" justifyContent="space-between">
-        <s-stack direction="inline" gap="base" alignItems="center">
-          <s-badge tone={done ? "success" : "neutral"}>{done ? "Done" : `Step ${number}`}</s-badge>
-          <s-stack direction="block" gap="none">
-            <s-text weight="bold">{title}</s-text>
-            <s-text tone="subdued">{description}</s-text>
-          </s-stack>
-        </s-stack>
-        {href ? (
-          <s-button href={href} variant={done ? "tertiary" : "primary"}>
-            {done ? "Review" : ctaLabel}
-          </s-button>
-        ) : (
-          <s-button
-            variant={done ? "tertiary" : "primary"}
-            onClick={onClick}
-            {...(loading ? { loading: true } : {})}
-          >
-            {done ? "Review" : ctaLabel}
-          </s-button>
-        )}
-      </s-stack>
-    </s-box>
+  const content = (
+    <>
+      <span className={`${styles.stepNumber} ${done ? styles.stepDone : ""}`}>
+        {done ? "✓" : number}
+      </span>
+      <span>
+        <strong>{title}</strong>
+        <small>{description}</small>
+      </span>
+      <span className={styles.stepAction}>{loading ? "Creating…" : done ? "Review" : ctaLabel}</span>
+    </>
   );
-}
-
-function InfoRow({ title, children }) {
-  return (
-    <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
-      <s-stack direction="block" gap="tight">
-        <s-text weight="bold">{title}</s-text>
-        <s-text tone="subdued">{children}</s-text>
-      </s-stack>
-    </s-box>
+  return href ? (
+    <Link className={styles.step} to={href}>{content}</Link>
+  ) : (
+    <button className={styles.step} type="button" onClick={onClick} disabled={loading}>{content}</button>
   );
 }
 
@@ -102,20 +84,19 @@ function GetStartedSection({ merchant, catalogue, cases, onCreateDemoCase, creat
   const allDone = hasBranding && hasCatalogue && hasCase;
 
   return (
-    <s-section heading={allDone ? "You're all set up" : "Three steps to get Care working for you"}>
-      {!allDone && (
-        <s-paragraph>
-          This should take about five minutes. Once all three are done, customers can request
-          repairs, cleaning, or returns themselves — branded to match your store, with quotes,
-          approvals, and progress tracking built in.
-        </s-paragraph>
-      )}
-      <s-stack direction="block" gap="base">
+    <section className={styles.card}>
+      <div className={styles.cardHeader}>
+        <div>
+          <p className={styles.eyebrow}>{allDone ? "Set up" : "Start here"}</p>
+          <h2>{allDone ? "Your customer care flow is ready" : "Three simple steps"}</h2>
+        </div>
+      </div>
+      <div className={styles.stepList}>
         <Step
           done={hasBranding}
           number={1}
           title="Set up your branding"
-          description="Your brand name, colours, and support email — this fills in your customer request form, tracking page, and every email automatically."
+          description="Name, colours, logo and support details."
           href="/app/branding"
           ctaLabel="Set up branding"
         />
@@ -123,7 +104,7 @@ function GetStartedSection({ merchant, catalogue, cases, onCreateDemoCase, creat
           done={hasCatalogue}
           number={2}
           title="Build your service catalogue"
-          description="Add the repairs, cleaning, or maintenance services you offer, so customers can pick one when they submit a request."
+          description="Add what customers can ask you to help with."
           href="/app/catalogue"
           ctaLabel="Add services"
         />
@@ -131,13 +112,13 @@ function GetStartedSection({ merchant, catalogue, cases, onCreateDemoCase, creat
           done={hasCase}
           number={3}
           title="Create your first case"
-          description="Try it with a demo case — no real customer needed — to see the tracking page and emails a customer would get."
+          description="See the full experience without using a real customer."
           onClick={onCreateDemoCase}
           ctaLabel="Create a demo case"
           loading={creatingDemo}
         />
-      </s-stack>
-    </s-section>
+      </div>
+    </section>
   );
 }
 
@@ -145,45 +126,48 @@ export default function Index() {
   const { merchant, cases, catalogue } = useLoaderData();
   const fetcher = useFetcher();
   const isCreatingDemo = fetcher.state !== "idle" && fetcher.formData?.get("intent") === "create_test_case";
+  const active = cases.filter((careCase) => !["completed", "declined"].includes(careCase.status));
+  const needingAttention = active.filter(needsMerchantAction).length;
+  const completed = cases.filter((careCase) => careCase.status === "completed").length;
+  const ready = Boolean(merchant.brandName) && catalogue.length > 0 && cases.length > 0;
 
   return (
-    <s-page heading="Care">
-      <s-button href="/app/cases" slot="primary-action">
-        Go to cases
-      </s-button>
+    <s-page heading={ready ? "Care" : "Set up Care"} inlineSize="large">
+      <div className={styles.shell}>
+        <header className={styles.hero}>
+          <div>
+            <p className={styles.eyebrow}>Customer care</p>
+            <h1>{ready ? "Everything that needs your attention" : "A calmer way to manage aftercare"}</h1>
+            <p className={styles.lede}>
+              Requests, quotes, approvals and progress in one clear place.
+            </p>
+          </div>
+          <Link className={styles.primaryLink} to="/app/cases">Go to cases</Link>
+        </header>
 
-      <GetStartedSection
-        merchant={merchant}
-        catalogue={catalogue}
-        cases={cases}
-        onCreateDemoCase={() => fetcher.submit({ intent: "create_test_case" }, { method: "POST" })}
-        creatingDemo={isCreatingDemo}
-      />
+        <div className={styles.stats}>
+          <div className={styles.stat}><strong>{needingAttention}</strong><span>Need your attention</span></div>
+          <div className={styles.stat}><strong>{active.length}</strong><span>In progress</span></div>
+          <div className={styles.stat}><strong>{completed}</strong><span>Completed</span></div>
+        </div>
 
-      <s-section heading="What this app does">
-        <s-paragraph>
-          Care turns ad-hoc repair, cleaning, and maintenance requests into a structured
-          workflow. A customer submits a request (through your request link, or one you send
-          them directly), you send them a quote, they approve or decline it, and they can track
-          progress the whole way through on a branded page — without a
-          single back-and-forth email.
-        </s-paragraph>
-      </s-section>
-
-      <s-section heading="Setting up & personalizing">
-        <s-stack direction="block" gap="tight">
-          <InfoRow title="Branding">
-            Set this once: your brand name, colours, and support email. Support email also
-            controls whether you get notified by email when a customer submits a new case —
-            leave it blank and Care just won't send that alert.
-          </InfoRow>
-          <InfoRow title="Service catalogue">
-            The list of services customers choose from on the request form — cleaning, repairs,
-            resizing, restoration, whatever fits your business. Customers can also pick "Not
-            sure — let us take a look" if nothing fits.
-          </InfoRow>
-        </s-stack>
-      </s-section>
+        <div className={styles.dashboardGrid}>
+          <GetStartedSection
+            merchant={merchant}
+            catalogue={catalogue}
+            cases={cases}
+            onCreateDemoCase={() => fetcher.submit({ intent: "create_test_case" }, { method: "POST" })}
+            creatingDemo={isCreatingDemo}
+          />
+          <aside className={`${styles.card} ${styles.quickLinks}`}>
+            <p className={styles.eyebrow}>Set once</p>
+            <h2>Your customer experience</h2>
+            <Link to="/app/branding"><span>Branding & setup</span><small>{merchant.brandName || "Not set yet"}</small></Link>
+            <Link to="/app/catalogue"><span>Services & pricing</span><small>{catalogue.length} service{catalogue.length === 1 ? "" : "s"}</small></Link>
+            <Link to="/app/billing"><span>Plan & usage</span><small>View your allowance</small></Link>
+          </aside>
+        </div>
+      </div>
     </s-page>
   );
 }

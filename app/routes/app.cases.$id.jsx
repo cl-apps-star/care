@@ -11,6 +11,7 @@ import {
 } from "../care.server";
 import { STAGES, stageLabel, statusTone, nextStage, needsMerchantAction } from "../care-stages";
 import { sendQuoteEmail, sendStageUpdateEmail, sendReadyToReturnEmail } from "../email.server";
+import styles from "../styles/care-admin.module.css";
 
 // Same tinted-card pattern used on the dashboard (app._index.jsx's
 // SECTION_TINTS/TintedSection) — duplicated here rather than shared from a
@@ -184,7 +185,15 @@ export default function CaseDetail() {
   const quoteAlreadySent = careCase.quoteSentAt != null;
 
   return (
-        <s-page heading={`${careCase.productTitle || "Case"} - ${careCase.serviceName}`} backAction={{ url: "/app/cases" }}>
+        <s-page heading={`${careCase.productTitle || "Case"} - ${careCase.serviceName}`} backAction={{ url: "/app/cases" }} inlineSize="large">
+          <div className={`${styles.shell} ${styles.caseShell}`}>
+            <header className={styles.hero}>
+              <div>
+                <p className={styles.eyebrow}>Case · {careCase.customerName}</p>
+                <h1>{careCase.productTitle || careCase.serviceName}</h1>
+                <p className={styles.lede}>{careCase.serviceName}{careCase.shopifyOrderName ? ` · ${careCase.shopifyOrderName}` : ""}</p>
+              </div>
+            </header>
                 {/* One glance, top of page, answers "what's going on and is
                     there anything I need to do" — the tone (color) and the
                     "Needs you" flag do the same job as scanning the whole
@@ -357,6 +366,7 @@ export default function CaseDetail() {
                                 </s-stack>
                       </form>
               </s-section>
+          </div>
         </s-page>
       );
 }
