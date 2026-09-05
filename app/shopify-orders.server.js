@@ -42,11 +42,6 @@ export async function findOrderForCustomer({ shop, orderNumber, email }) {
                 id
                 name
                 email
-                customer {
-                  firstName
-                  lastName
-                  email
-                }
                 lineItems(first: 250) {
                   nodes {
                     title
@@ -80,7 +75,7 @@ export async function findOrderForCustomer({ shop, orderNumber, email }) {
       return { found: false, reason: "not_found" };
     }
 
-    const orderEmail = (order.email || order.customer?.email || "").toLowerCase();
+    const orderEmail = (order.email || "").toLowerCase();
     if (orderEmail !== email.trim().toLowerCase()) {
       return { found: false, reason: "email_mismatch" };
     }
@@ -95,7 +90,6 @@ export async function findOrderForCustomer({ shop, orderNumber, email }) {
       found: true,
       shopifyOrderId: numericIdFromGid(order.id),
       shopifyOrderName: order.name,
-      customerName: `${order.customer?.firstName || ""} ${order.customer?.lastName || ""}`.trim(),
       lineItems,
     };
   } catch (err) {
