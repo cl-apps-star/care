@@ -8,6 +8,10 @@ import prisma from "./db.server";
 
 const API_VERSION = "2025-10";
 
+function numericIdFromGid(gid) {
+  return typeof gid === "string" ? gid.split("/").pop() : null;
+}
+
 export async function findOrderForCustomer({ shop, orderNumber, email }) {
   if (!shop || !orderNumber || !email) {
     return { found: false, reason: "missing_input" };
@@ -24,15 +28,41 @@ export async function findOrderForCustomer({ shop, orderNumber, email }) {
   const name = orderNumber.trim().startsWith("#") ? orderNumber.trim() : `#${orderNumber.trim()}`;
 
   try {
-    const res = await fetch(
-      `https://${shop}/admin/api/${API_VERSION}/orders.json?name=${encodeURIComponent(name)}&status=any`,
-      {
-        headers: {
-          "X-Shopify-Access-Token": session.accessToken,
-          "Content-Type": "application/json",
-        },
+    const res = await fetch(`https://${shop}/admin/api/${API_VERSION}/graphql.json`, {
+      method: "POST",
+      headers: {
+        "X-Shopify-Access-Token": session.accessToken,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        query: `#graphql
+          query FindOrderForCustomer($query: String!) {
+            orders(first: 1, query: $query, sortKey: CREATED_AT, reverse: true) {
+              nodes {
+                id
+                name
+                email
+                customer {
+                  firstName
+                  lastName
+                  email
+                }
+                lineItems(first: 250) {
+                  nodes {
+                    title
+                    quantity
+                    product {
+                      id
+                    }
+                  }
+                }
+              }
+            }
+          }
+        `,
+        variables: { query: `name:${name}` },
+      }),
+    });
 
     if (!res.ok) {
       console.warn(`[shopify-orders.server] order lookup returned ${res.status}`);
@@ -40,7 +70,12 @@ export async function findOrderForCustomer({ shop, orderNumber, email }) {
     }
 
     const data = await res.json();
-    const order = (data.orders || [])[0];
+    if (data.errors?.length) {
+      console.warn("[shopify-orders.server] GraphQL order lookup failed", data.errors);
+      return { found: false, reason: "api_error" };
+    }
+
+    const order = data.data?.orders?.nodes?.[0];
     if (!order) {
       return { found: false, reason: "not_found" };
     }
@@ -50,17 +85,17 @@ export async function findOrderForCustomer({ shop, orderNumber, email }) {
       return { found: false, reason: "email_mismatch" };
     }
 
-    const lineItems = (order.line_items || []).map((li) => ({
+    const lineItems = (order.lineItems?.nodes || []).map((li) => ({
       title: li.title,
-      shopifyProductId: li.product_id ? String(li.product_id) : null,
+      shopifyProductId: numericIdFromGid(li.product?.id),
       quantity: li.quantity,
     }));
 
     return {
       found: true,
-      shopifyOrderId: String(order.id),
+      shopifyOrderId: numericIdFromGid(order.id),
       shopifyOrderName: order.name,
-      customerName: `${order.customer?.first_name || ""} ${order.customer?.last_name || ""}`.trim(),
+      customerName: `${order.customer?.firstName || ""} ${order.customer?.lastName || ""}`.trim(),
       lineItems,
     };
   } catch (err) {
