@@ -14,6 +14,62 @@ function addressList(value) {
     .filter(Boolean);
 }
 
+const DEFAULT_CONSUMER_FALLBACK_DOMAINS = [
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "msn.com",
+  "yahoo.com",
+  "ymail.com",
+  "rocketmail.com",
+  "outlook.co.uk",
+  "hotmail.co.uk",
+  "live.co.uk",
+  "yahoo.co.uk",
+];
+
+function normaliseProvider(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function parseDomainList(value) {
+  return String(value || "")
+    .split(/[\s,;]+/)
+    .map(item => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function domainMatches(domain, pattern) {
+  const candidate = String(domain || "").toLowerCase();
+  const rule = String(pattern || "").toLowerCase();
+  if (!candidate || !rule) return false;
+  if (rule.startsWith("*.")) {
+    const suffix = rule.slice(1);
+    return candidate.endsWith(suffix) || candidate === rule.slice(2);
+  }
+  return candidate === rule;
+}
+
+function recipientDomains(...values) {
+  return [...new Set(values
+    .flatMap(addressList)
+    .map(item => item.split("@").pop()?.toLowerCase())
+    .filter(Boolean))];
+}
+
+function providerForRecipients(defaultProvider, { to, cc, bcc }) {
+  const provider = normaliseProvider(defaultProvider || process.env.EMAIL_PROVIDER || "resend");
+  const fallbackProvider = normaliseProvider(process.env.EMAIL_PROVIDER_CONSUMER_FALLBACK);
+  if (!fallbackProvider) return provider;
+
+  const fallbackDomains = parseDomainList(process.env.EMAIL_PROVIDER_CONSUMER_FALLBACK_DOMAINS);
+  const domainsToCheck = fallbackDomains.length ? fallbackDomains : DEFAULT_CONSUMER_FALLBACK_DOMAINS;
+  const domains = recipientDomains(to, cc, bcc);
+  return domains.some(domain => domainsToCheck.some(pattern => domainMatches(domain, pattern)))
+    ? fallbackProvider
+    : provider;
+}
+
 function headerAddress(value) {
   return String(value || "").replace(/[\r\n]/g, " ").trim();
 }
@@ -336,8 +392,9 @@ async function sendViaPostmark({ from, to, replyTo, cc, bcc, subject, html, text
 //   success -> { skipped: false, provider, providerMessageId }
 //   failure -> { skipped: true, reason }
 export async function sendTransactionalEmail({ from, to, replyTo, cc, bcc, subject, html, text, metadata, provider = (process.env.EMAIL_PROVIDER || "resend").toLowerCase() }) {
+  const selectedProvider = providerForRecipients(provider, { to, cc, bcc });
 
-  if (provider === "smtp") {
+  if (selectedProvider === "smtp") {
     try {
       return await sendViaSmtp({ from, to, replyTo, cc, bcc, subject, html, text, metadata });
     } catch {
@@ -345,7 +402,7 @@ export async function sendTransactionalEmail({ from, to, replyTo, cc, bcc, subje
     }
   }
 
-  if (provider === "postmark") {
+  if (selectedProvider === "postmark") {
     try {
       return await sendViaPostmark({ from, to, replyTo, cc, bcc, subject, html, text, metadata });
     } catch {
@@ -353,12 +410,12 @@ export async function sendTransactionalEmail({ from, to, replyTo, cc, bcc, subje
     }
   }
 
-  if (provider !== "resend") {
+  if (selectedProvider !== "resend") {
     // Unknown value in EMAIL_PROVIDER (typo, leftover from testing, etc) —
     // fail loudly instead of silently guessing which provider was meant.
     return {
       skipped: true,
-      reason: `Unknown EMAIL_PROVIDER "${provider}" — expected "resend", "postmark" or "smtp".`,
+      reason: `Unknown EMAIL_PROVIDER "${selectedProvider}" — expected "resend", "postmark" or "smtp".`,
     };
   }
 
