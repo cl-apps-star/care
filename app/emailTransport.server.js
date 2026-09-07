@@ -24,11 +24,36 @@ function displayName(value) {
   return (match?.[1] || "").replace(/[<>"\r\n]/g, "").trim();
 }
 
-function smtpFromAddress(from, config) {
-  const override = address(config.fromAddress);
+function serviceFromName(fromName, serviceName) {
+  const source = headerText(fromName);
+  const service = headerText(serviceName || "CL Apps");
+  if (!source || source.toLowerCase() === service.toLowerCase()) return service;
+  if (source.toLowerCase().includes(` via ${service.toLowerCase()}`)) return source;
+  return `${source} via ${service}`;
+}
+
+function deliveryFromAddress(from, options = {}) {
+  const override = address(
+    options.fromAddress ||
+    process.env.EMAIL_FROM_ADDRESS ||
+    process.env.TRANSACTIONAL_FROM_ADDRESS,
+  );
   if (!override) return from;
-  const name = displayName(from) || headerText(config.fromName || "CL Apps");
+  const name = serviceFromName(
+    displayName(from),
+    options.fromName ||
+    process.env.EMAIL_FROM_NAME ||
+    process.env.TRANSACTIONAL_FROM_NAME ||
+    "CL Apps",
+  );
   return `${name} <${override}>`;
+}
+
+function smtpFromAddress(from, config) {
+  return deliveryFromAddress(from, {
+    fromAddress: config.fromAddress,
+    fromName: config.fromName,
+  });
 }
 
 function headerText(value) {
@@ -225,7 +250,7 @@ async function sendViaResend({ from, to, replyTo, cc, bcc, subject, html, text, 
   const resend = new Resend(process.env.RESEND_API_KEY);
 
   const { data, error } = await resend.emails.send({
-    from,
+    from: deliveryFromAddress(from),
     to,
     replyTo,
     ...(cc ? { cc } : {}),
@@ -264,7 +289,7 @@ async function sendViaPostmark({ from, to, replyTo, cc, bcc, subject, html, text
       "X-Postmark-Server-Token": process.env.POSTMARK_API_KEY,
     },
     body: JSON.stringify({
-      From: from,
+      From: deliveryFromAddress(from),
       To: Array.isArray(to) ? to.join(",") : to,
       ReplyTo: replyTo,
       ...(cc ? { Cc: Array.isArray(cc) ? cc.join(",") : cc } : {}),
