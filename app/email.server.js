@@ -1,3 +1,4 @@
+import db from "./db.server";
 import { stageLabel } from "./care-stages";
 import { sendTransactionalEmail } from "./emailProviders.server";
 
@@ -191,11 +192,9 @@ function renderCareEmail({
   return { html, text, fromName: brand.name };
 }
 
-async function send({ fromName, to, subject, html, text, merchant }) {
-  if (!to) {
-    return { skipped: true, reason: "No customer email on file." };
-  }
-  return sendTransactionalEmail({
+async function send({ fromName, to, subject, html, text, merchant, context }) {
+  const result = await sendTransactionalEmail({
+    context,
     from: `${fromName} <care@cl-apps.net>`,
     to,
     // Reply to THIS merchant's own support address if they've set one in
@@ -207,6 +206,15 @@ async function send({ fromName, to, subject, html, text, merchant }) {
     html,
     text,
   });
+  if (!result.skipped && context.updateId && !context.kind.includes("Alert")) {
+    try {
+      await db.careUpdate.updateMany({ where: { id: context.updateId, caseId: context.resourceId }, data: { customerNotified: true } });
+    } catch {
+      return { ...result, skipped: true, reason: "Email was accepted, but the update status could not be saved. Do not send again; contact support." };
+    }
+  }
+  if (result.skipped) console.warn("[CARE] email_unconfirmed", JSON.stringify({ emailRecordId: result.emailRecordId, status: result.status }));
+  return result;
 }
 
 function greetingFor(customerName) {
@@ -214,7 +222,7 @@ function greetingFor(customerName) {
   return firstName ? `${firstName},` : "Hello,";
 }
 
-export async function sendCaseReceivedEmail({ careCase, merchant, trackingUrl }) {
+export async function sendCaseReceivedEmail({ careCase, merchant, updateId, trackingUrl }) {
   const piece = careCase.productTitle || "your piece";
   const { html, text, fromName } = renderCareEmail({
     merchant,
@@ -229,6 +237,7 @@ export async function sendCaseReceivedEmail({ careCase, merchant, trackingUrl })
     ctaUrl: trackingUrl,
   });
   return send({
+    context: { shop: careCase.shop || merchant?.shop, kind: "sendCaseReceivedEmail", resourceId: careCase.id, updateId, dedupeKey: updateId ? `${updateId}:sendCaseReceivedEmail` : undefined },
     fromName,
     merchant,
     to: careCase.customerEmail,
@@ -254,6 +263,7 @@ export async function sendCareRequestInviteEmail({
   orderName,
   productTitle,
   portalUrl,
+  inviteId,
 }) {
   const piece = productTitle || "your piece";
   const { html, text, fromName } = renderCareEmail({
@@ -269,6 +279,7 @@ export async function sendCareRequestInviteEmail({
     ctaUrl: portalUrl,
   });
   return send({
+    context: { shop: merchant?.shop, kind: "sendCareRequestInviteEmail", resourceId: inviteId || orderName || null },
     fromName,
     merchant,
     to: customerEmail,
@@ -288,13 +299,7 @@ export async function sendCareRequestInviteEmail({
 // pattern as `send()` skipping a customer email; logs a console warning
 // either way so a missing notification is diagnosable in Railway logs
 // instead of just silently never arriving.
-export async function sendNewCaseAlertEmail({ careCase, merchant, adminUrl }) {
-  if (!merchant?.supportEmail) {
-    console.warn(
-      `[CARE] Skipped new-case alert for shop ${merchant?.shop} — no support email set in Branding.`,
-    );
-    return { skipped: true, reason: "Merchant has no support email set in Branding." };
-  }
+export async function sendNewCaseAlertEmail({ careCase, merchant, updateId, adminUrl }) {
   const piece = careCase.productTitle || "an item";
   const { html, text, fromName } = renderCareEmail({
     merchant,
@@ -311,14 +316,15 @@ export async function sendNewCaseAlertEmail({ careCase, merchant, adminUrl }) {
     ctaUrl: adminUrl,
   });
   const result = await send({
+    context: { shop: careCase.shop || merchant?.shop, kind: "sendNewCaseAlertEmail", resourceId: careCase.id, updateId, dedupeKey: updateId ? `${updateId}:sendNewCaseAlertEmail` : undefined },
     fromName,
     merchant,
-    to: merchant.supportEmail,
+    to: merchant?.supportEmail,
     subject: `New care request from ${careCase.customerName || "a customer"}`,
     html,
     text,
   });
-  console.log(`[CARE] New-case alert sent to ${merchant.supportEmail} for case ${careCase.id}.`);
+  console.log("[CARE] email_outcome", JSON.stringify({ caseId: careCase.id, status: result.status, emailRecordId: result.emailRecordId }));
   return result;
 }
 
@@ -328,13 +334,7 @@ export async function sendNewCaseAlertEmail({ careCase, merchant, adminUrl }) {
 // actually start the work, so a merchant missing this notification could
 // leave an approved repair waiting without realizing it's time to begin.
 // Same tolerant skip-if-blank pattern as the other merchant-facing alert.
-export async function sendQuoteApprovedAlertEmail({ careCase, merchant, adminUrl }) {
-  if (!merchant?.supportEmail) {
-    console.warn(
-      `[CARE] Skipped quote-approved alert for shop ${merchant?.shop} — no support email set in Branding.`,
-    );
-    return { skipped: true, reason: "Merchant has no support email set in Branding." };
-  }
+export async function sendQuoteApprovedAlertEmail({ careCase, merchant, updateId, adminUrl }) {
   const piece = careCase.productTitle || "an item";
   const total =
     careCase.quoteTotal != null
@@ -352,18 +352,19 @@ export async function sendQuoteApprovedAlertEmail({ careCase, merchant, adminUrl
     ctaUrl: adminUrl,
   });
   const result = await send({
+    context: { shop: careCase.shop || merchant?.shop, kind: "sendQuoteApprovedAlertEmail", resourceId: careCase.id, updateId, dedupeKey: updateId ? `${updateId}:sendQuoteApprovedAlertEmail` : undefined },
     fromName,
     merchant,
-    to: merchant.supportEmail,
+    to: merchant?.supportEmail,
     subject: `Quote approved: ${careCase.customerName || "a customer"}`,
     html,
     text,
   });
-  console.log(`[CARE] Quote-approved alert sent to ${merchant.supportEmail} for case ${careCase.id}.`);
+  console.log("[CARE] email_outcome", JSON.stringify({ caseId: careCase.id, status: result.status, emailRecordId: result.emailRecordId }));
   return result;
 }
 
-export async function sendQuoteEmail({ careCase, merchant, trackingUrl }) {
+export async function sendQuoteEmail({ careCase, merchant, updateId, trackingUrl }) {
   const total =
     careCase.quoteTotal != null
       ? `${careCase.quoteCurrency || "GBP"} ${careCase.quoteTotal.toFixed(2)}`
@@ -385,6 +386,7 @@ export async function sendQuoteEmail({ careCase, merchant, trackingUrl }) {
     ctaUrl: trackingUrl,
   });
   return send({
+    context: { shop: careCase.shop || merchant?.shop, kind: "sendQuoteEmail", resourceId: careCase.id, updateId, dedupeKey: updateId ? `${updateId}:sendQuoteEmail` : undefined },
     fromName,
     merchant,
     to: careCase.customerEmail,
@@ -394,7 +396,7 @@ export async function sendQuoteEmail({ careCase, merchant, trackingUrl }) {
   });
 }
 
-export async function sendStageUpdateEmail({ careCase, merchant, trackingUrl, note }) {
+export async function sendStageUpdateEmail({ careCase, merchant, updateId, trackingUrl, note }) {
   const label = stageLabel(careCase.status);
   const piece = careCase.productTitle || "your piece";
   const paragraphs = [
@@ -412,6 +414,7 @@ export async function sendStageUpdateEmail({ careCase, merchant, trackingUrl, no
     ctaUrl: trackingUrl,
   });
   return send({
+    context: { shop: careCase.shop || merchant?.shop, kind: "sendStageUpdateEmail", resourceId: careCase.id, updateId, dedupeKey: updateId ? `${updateId}:sendStageUpdateEmail` : undefined },
     fromName,
     merchant,
     to: careCase.customerEmail,
@@ -421,7 +424,7 @@ export async function sendStageUpdateEmail({ careCase, merchant, trackingUrl, no
   });
 }
 
-export async function sendReadyToReturnEmail({ careCase, merchant, trackingUrl }) {
+export async function sendReadyToReturnEmail({ careCase, merchant, updateId, trackingUrl }) {
   const piece = careCase.productTitle || "Your piece";
   const { html, text, fromName } = renderCareEmail({
     merchant,
@@ -435,6 +438,7 @@ export async function sendReadyToReturnEmail({ careCase, merchant, trackingUrl }
     ctaUrl: trackingUrl,
   });
   return send({
+    context: { shop: careCase.shop || merchant?.shop, kind: "sendReadyToReturnEmail", resourceId: careCase.id, updateId, dedupeKey: updateId ? `${updateId}:sendReadyToReturnEmail` : undefined },
     fromName,
     merchant,
     to: careCase.customerEmail,

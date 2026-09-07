@@ -136,7 +136,7 @@ export async function advanceCase(caseId, { status, note, media, notifyCustomer 
                 note: note ?? null,
                 media: media ? JSON.stringify(media) : null,
                 visibleToCustomer: true,
-                customerNotified: notifyCustomer,
+                customerNotified: false,
         },
   });
 
@@ -189,7 +189,7 @@ export async function setQuote(caseId, { labourCost = 0, partsCost = 0, shipping
 export async function sendQuote(caseId) {
     return advanceCase(caseId, {
           status: "quote_sent",
-          note: "Quote sent to customer.",
+          note: "Quote prepared for the customer.",
           notifyCustomer: true,
     });
 }

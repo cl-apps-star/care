@@ -21,11 +21,12 @@ export const action = async ({ request, params }) => {
   const trackingUrl = `${appUrl}/care/${careCase.token}`;
 
   if (intent === "approve_quote" && careCase.status === "quote_sent") {
-    const { case: updated } = await approveQuote(careCase.id);
+    const { case: updated, update } = await approveQuote(careCase.id);
     const merchant = await prisma.merchantProfile.findUnique({ where: { id: updated.merchantId } });
 
     await sendStageUpdateEmail({
       careCase: updated,
+      updateId: update?.id,
       merchant,
       trackingUrl,
       note: "Thanks — we'll get started.",

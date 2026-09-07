@@ -168,3 +168,64 @@ model CareUpdate {
   customerNotified  Boolean @default(false)
   createdAt     DateTime @default(now())
 }
+
+
+// Provider acceptance and server delivery do not establish Inbox placement.
+model EmailMessage {
+  id                String   @id @default(cuid())
+  shop              String
+  kind              String
+  resourceId        String?
+  updateId          String?
+  dedupeKey         String?  @unique
+  provider          String
+  providerMessageId String?
+  subject           String
+  status            String   @default("sending")
+  reason            String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  resources         EmailResource[]
+  recipients        EmailRecipient[]
+  events            EmailDeliveryEvent[]
+
+  @@unique([provider, providerMessageId])
+  @@index([shop, createdAt])
+  @@index([shop, resourceId])
+  @@index([status, updatedAt])
+}
+
+model EmailRecipient {
+  id          String   @id @default(cuid())
+  messageId   String
+  email       String
+  role        String
+  status      String   @default("sending")
+  eventAt     DateTime?
+  message     EmailMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, email])
+  @@index([email])
+}
+
+model EmailDeliveryEvent {
+  id          String   @id @default(cuid())
+  eventKey    String   @unique
+  messageId   String
+  recipient   String
+  type        String
+  occurredAt  DateTime
+  createdAt   DateTime @default(now())
+  message     EmailMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+model EmailResource {
+  id String @id @default(cuid())
+  messageId String
+  resourceId String
+  message EmailMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  @@unique([messageId, resourceId])
+  @@index([resourceId])
+}

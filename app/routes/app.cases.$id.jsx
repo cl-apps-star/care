@@ -123,20 +123,23 @@ export const action = async ({ request, params }) => {
                   taxPercent: formData.get("taxPercent") || 0,
                   note: formData.get("note") || undefined,
           });
-          const { case: updated } = await sendQuote(careCase.id);
-          await sendQuoteEmail({ careCase: updated, merchant, trackingUrl });
+          const { case: updated, update } = await sendQuote(careCase.id);
+          const emailResult = await sendQuoteEmail({ careCase: updated, updateId: update?.id, merchant, trackingUrl });
+          if (emailResult.skipped) return { error: `The case was updated, but email sending is unconfirmed: ${emailResult.reason}` };
           return { ok: true, intent: "set_and_send_quote" };
     }
 
     if (intent === "advance") {
           const note = formData.get("note") || undefined;
           const notify = formData.get("notify") === "on";
-          const { case: updated } = await advanceCase(careCase.id, { note, notifyCustomer: notify });
+          const { case: updated, update } = await advanceCase(careCase.id, { note, notifyCustomer: notify });
           if (notify) {
                   if (updated.status === "ready_to_return") {
-                            await sendReadyToReturnEmail({ careCase: updated, merchant, trackingUrl });
+                            const emailResult = await sendReadyToReturnEmail({ careCase: updated, updateId: update?.id, merchant, trackingUrl });
+          if (emailResult.skipped) return { error: `The case was updated, but email sending is unconfirmed: ${emailResult.reason}` };
                   } else {
-                            await sendStageUpdateEmail({ careCase: updated, merchant, trackingUrl, note });
+                            const emailResult = await sendStageUpdateEmail({ careCase: updated, updateId: update?.id, merchant, trackingUrl, note });
+          if (emailResult.skipped) return { error: `The case was updated, but email sending is unconfirmed: ${emailResult.reason}` };
                   }
           }
           return { ok: true, intent: "advance", newStatus: updated.status };
@@ -186,6 +189,7 @@ export default function CaseDetail() {
 
   return (
         <s-page heading={`${careCase.productTitle || "Case"} - ${careCase.serviceName}`} backAction={{ url: "/app/cases" }} inlineSize="large">
+      {fetcher.data?.error ? <s-banner tone="critical">{fetcher.data.error}</s-banner> : null}
           <div className={`${styles.shell} ${styles.caseShell}`}>
             <header className={styles.hero}>
               <div>

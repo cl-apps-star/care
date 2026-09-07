@@ -4,6 +4,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import {
   getOrCreateMerchantProfile,
+  getCaseById,
   listCasesForMerchant,
   listCatalogue,
   createCareCase,
@@ -113,6 +114,7 @@ export const action = async ({ request }) => {
       orderName: shopifyOrderName,
       productTitle,
       portalUrl,
+      inviteId: invite.id,
     });
 
     if (sendResult?.skipped) {
@@ -131,15 +133,18 @@ export const action = async ({ request }) => {
 
   if (intent === "advance") {
     const caseId = formData.get("caseId");
+    if (!await getCaseById(caseId, merchant.id)) return { error: "Case not found." };
     const note = formData.get("note") || undefined;
     const notify = formData.get("notify") === "on";
-    const { case: updated } = await advanceCase(caseId, { note, notifyCustomer: notify });
+    const { case: updated, update } = await advanceCase(caseId, { note, notifyCustomer: notify });
     if (notify) {
       const trackingUrl = `${appUrl}/care/${updated.token}`;
       if (updated.status === "ready_to_return") {
-        await sendReadyToReturnEmail({ careCase: updated, merchant, trackingUrl });
+        const emailResult = await sendReadyToReturnEmail({ careCase: updated, updateId: update?.id, merchant, trackingUrl });
+          if (emailResult.skipped) return { error: `The case was updated, but email sending is unconfirmed: ${emailResult.reason}` };
       } else {
-        await sendStageUpdateEmail({ careCase: updated, merchant, trackingUrl, note });
+        const emailResult = await sendStageUpdateEmail({ careCase: updated, updateId: update?.id, merchant, trackingUrl, note });
+          if (emailResult.skipped) return { error: `The case was updated, but email sending is unconfirmed: ${emailResult.reason}` };
       }
     }
     return { ok: true };

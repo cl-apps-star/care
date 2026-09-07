@@ -1,3 +1,4 @@
+import { redactEmailRecords } from "../emailDelivery.server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 
@@ -17,5 +18,7 @@ export const action = async ({ request }) => {
           await prisma.merchantProfile.delete({ where: { id: merchant.id } });
     }
 
-    return new Response();
+    await redactEmailRecords(shop);
+
+  return new Response();
 };

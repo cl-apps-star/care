@@ -1,3 +1,4 @@
+import { redactEmailRecords } from "../emailDelivery.server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 
@@ -12,8 +13,10 @@ export const action = async ({ request }) => {
 
     const email = payload?.customer?.email;
     if (email) {
+    const resources = await prisma.careCase.findMany({ where: { merchant: { shop }, customerEmail: email }, select: { id: true } });
+    await redactEmailRecords(shop, email, resources.map(r => r.id));
           await prisma.careCase.updateMany({
-                  where: { customerEmail: email },
+                  where: { merchant: { shop }, customerEmail: email },
                   data: { customerEmail: "redacted@example.com", customerName: "Redacted" },
           });
     }
