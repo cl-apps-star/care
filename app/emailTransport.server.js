@@ -354,6 +354,12 @@ async function sendViaPostmark({ from, to, replyTo, cc, bcc, subject, html, text
       HtmlBody: html,
       TextBody: text,
       Metadata: metadata,
+      // Keep transactional links exactly as the app generated them. Relying on
+      // stream defaults can rewrite links through a tracking domain, which is
+      // a poor fit for customer status emails and makes placement tests harder
+      // to interpret.
+      TrackOpens: false,
+      TrackLinks: "None",
       // Postmark keeps transactional mail on its own reputation track,
       // separate from broadcast/marketing sends — this must be a
       // "Transactional" stream (default server stream ID is "outbound").
