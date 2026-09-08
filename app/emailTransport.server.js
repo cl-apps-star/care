@@ -1,6 +1,7 @@
 import net from "node:net";
 import tls from "node:tls";
 import { randomUUID } from "node:crypto";
+import { emailHeaderPairs, emailHeadersObject } from "./emailHeaders.server.js";
 
 // Network transport only. Application senders use emailProviders.server to record first.
 function address(value) {
@@ -160,6 +161,7 @@ function quotedPrintable(value) {
 function buildMimeMessage({ from, to, replyTo, cc, bcc, subject, html, text, metadata }) {
   const messageId = `<${randomUUID()}@cl-apps.net>`;
   const boundary = `cl-apps-${randomUUID()}`;
+  const customHeaders = emailHeaderPairs(metadata);
   const headers = [
     foldHeader("From", headerAddress(from)),
     foldHeader("To", addressList(to).join(", ")),
@@ -173,6 +175,7 @@ function buildMimeMessage({ from, to, replyTo, cc, bcc, subject, html, text, met
       foldHeader("X-CL-Email-Record-ID", headerText(metadata.emailRecordId)),
       foldHeader("X-Mailin-custom", `emailRecordId=${headerText(metadata.emailRecordId)}`),
     ] : []),
+    ...customHeaders.map(({ name, value }) => foldHeader(name, value)),
   ];
 
   if (html && text) {
@@ -332,6 +335,7 @@ async function sendViaResend({ from, to, replyTo, cc, bcc, subject, html, text, 
     html,
     text,
     tags: metadata ? [{ name: "emailRecordId", value: metadata.emailRecordId }] : undefined,
+    headers: emailHeadersObject(metadata),
   });
 
   if (error) {
@@ -353,6 +357,7 @@ async function sendViaPostmark({ from, to, replyTo, cc, bcc, subject, html, text
     return { skipped: true, reason: "POSTMARK_API_KEY not set." };
   }
 
+  const postmarkHeaders = emailHeaderPairs(metadata).map(({ name, value }) => ({ Name: name, Value: value }));
   const response = await fetch("https://api.postmarkapp.com/email", {
     method: "POST",
     signal: AbortSignal.timeout(20000),
@@ -371,6 +376,7 @@ async function sendViaPostmark({ from, to, replyTo, cc, bcc, subject, html, text
       HtmlBody: html,
       TextBody: text,
       Metadata: metadata,
+      ...(postmarkHeaders.length ? { Headers: postmarkHeaders } : {}),
       // Keep transactional links exactly as the app generated them. Relying on
       // stream defaults can rewrite links through a tracking domain, which is
       // a poor fit for customer status emails and makes placement tests harder
@@ -438,6 +444,9 @@ async function sendViaBrevo({ from, to, replyTo, cc, bcc, subject, html, text, m
     "X-Mailin-custom": `emailRecordId=${emailRecordId}`,
     "X-Cl-Email-Record-Id": emailRecordId,
   } : undefined;
+  // Brevo adds list-unsubscribe/list-help handling itself for transactional messages;
+  // its API custom headers are for non-standard headers only. The generic SMTP
+  // route carries our own list-unsubscribe headers when a Brevo SMTP proof needs them.
   const payload = {
     sender: { email: fromEmail, ...(fromName ? { name: fromName } : {}) },
     to: toRecipients,
@@ -504,6 +513,10 @@ async function sendViaMailtrap({ from, to, replyTo, cc, bcc, subject, html, text
     return { skipped: true, status: "failed", reason: "Mailtrap sender or recipient is missing." };
   }
 
+  const mailtrapHeaders = {
+    ...(metadata?.emailRecordId ? { "X-CL-Email-Record-ID": headerText(metadata.emailRecordId) } : {}),
+    ...(emailHeadersObject(metadata) || {}),
+  };
   const response = await fetch("https://send.api.mailtrap.io/api/send", {
     method: "POST",
     signal: AbortSignal.timeout(20000),
@@ -524,7 +537,7 @@ async function sendViaMailtrap({ from, to, replyTo, cc, bcc, subject, html, text
       ...(text ? { text } : {}),
       category: "customer-notification",
       custom_variables: metadata || undefined,
-      headers: metadata?.emailRecordId ? { "X-CL-Email-Record-ID": headerText(metadata.emailRecordId) } : undefined,
+      ...(Object.keys(mailtrapHeaders).length ? { headers: mailtrapHeaders } : {}),
     }),
   });
 
@@ -573,6 +586,10 @@ async function sendViaMailjet({ from, to, replyTo, cc, bcc, subject, html, text,
   }
 
   const emailRecordId = headerText(metadata?.emailRecordId);
+  const mailjetHeaders = {
+    ...(emailRecordId ? { "X-CL-Email-Record-ID": emailRecordId } : {}),
+    ...(emailHeadersObject(metadata) || {}),
+  };
   const message = {
     From: { Email: fromEmail, ...(fromName ? { Name: fromName } : {}) },
     To: toRecipients,
@@ -583,7 +600,7 @@ async function sendViaMailjet({ from, to, replyTo, cc, bcc, subject, html, text,
     ...(text ? { TextPart: text } : {}),
     ...(html ? { HTMLPart: html } : {}),
     ...(emailRecordId ? { CustomID: emailRecordId, EventPayload: JSON.stringify(metadata || {}) } : {}),
-    Headers: emailRecordId ? { "X-CL-Email-Record-ID": emailRecordId } : undefined,
+    ...(Object.keys(mailjetHeaders).length ? { Headers: mailjetHeaders } : {}),
     TrackOpens: "disabled",
     TrackClicks: "disabled",
   };
