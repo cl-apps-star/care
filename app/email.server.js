@@ -161,11 +161,6 @@ function renderCareEmail({
                           </tr>
                         </table>
                       </td>
-                    </tr>
-                    <tr>
-                      <td align="center" style="padding:14px 12px 0 12px;">
-                        <a href="${ctaUrl}" target="_blank" style="font-family:Helvetica,Arial,sans-serif; font-size:10px; color:#9a9a92; word-break:break-all;">${ctaUrl}</a>
-                      </td>
                     </tr>`
                   : ""
               }
