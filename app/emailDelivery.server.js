@@ -3,6 +3,7 @@ import db from "./db.server";
 import { sendTransactionalEmail as transport } from "./emailTransport.server";
 
 const terminal = new Set(["failed", "suppressed", "complained"]);
+const terminalStatuses = [...terminal];
 export const emailStatusLabels = {
   sending: "Sending", accepted: "Sent to email provider", delivered: "Accepted by receiving mail server",
   failed: "Could not deliver", suppressed: "Sending blocked", complained: "Marked as spam by recipient",
@@ -33,6 +34,20 @@ function outcome(message, duplicate = false) {
   };
 }
 
+async function priorTerminalRecipient(shop, recipients) {
+  const primaryRecipients = recipients.filter(r => r.role === "to").map(r => r.email);
+  if (!primaryRecipients.length) return null;
+  return db.emailRecipient.findFirst({
+    where: {
+      email: { in: primaryRecipients },
+      role: "to",
+      status: { in: terminalStatuses },
+      message: { is: { shop } },
+    },
+    select: { email: true, status: true },
+  });
+}
+
 // All senders must supply context; no provider call can bypass recording.
 // A database failure aborts sending, rather than creating an untraceable email.
 export async function sendRecordedEmail(email) {
@@ -58,7 +73,14 @@ export async function sendRecordedEmail(email) {
     return outcome(previous, true);
   }
   let result;
-  if (!recipients.some(r => r.role === "to")) {
+  const blockedRecipient = await priorTerminalRecipient(context.shop, recipients);
+  if (blockedRecipient) {
+    result = {
+      skipped: true,
+      status: "suppressed",
+      reason: `A previous email to ${blockedRecipient.email} was marked ${blockedRecipient.status}. Sending is blocked to protect customer trust and sender reputation.`,
+    };
+  } else if (!recipients.some(r => r.role === "to")) {
     result = { skipped: true, status: "failed", reason: "No recipient email is available." };
   } else {
     try {
