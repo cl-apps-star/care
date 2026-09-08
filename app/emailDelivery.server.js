@@ -237,6 +237,27 @@ export function normaliseProviderEvent(event, providerHint = "") {
     };
   }
 
+  if (provider === "mailtrap") {
+    const type = firstString(event.event, event.type, event.status).toLowerCase();
+    const status = {
+      sending: "accepted", delivery: "delivered", delivered: "delivered",
+      "soft bounce": "unknown", soft_bounce: "unknown", suspension: "unknown",
+      bounce: "failed", bounced: "failed", reject: "failed", rejected: "failed",
+      spam: "complained", spam_complaint: "complained", unsubscribe: "suppressed", unsubscribed: "suppressed",
+    }[type];
+    if (!status) return null;
+    return {
+      provider: "mailtrap",
+      providerMessageId: firstString(event.message_id, event.messageId, event["message-id"], event.id),
+      recipient: normaliseRecipient(event.email || event.recipient || event.to),
+      occurredAt: eventDate(event.timestamp, event.time, event.date),
+      type,
+      status,
+      description: firstString(event.response, event.reason, event.description, event.bounce_category),
+      emailRecordId: eventRecordId(event.custom_variables || event.metadata || event.headers || event["X-CL-Email-Record-ID"]),
+    };
+  }
+
   return null;
 }
 
