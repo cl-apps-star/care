@@ -411,6 +411,76 @@ async function sendViaPostmark({ from, to, replyTo, cc, bcc, subject, html, text
   };
 }
 
+async function sendViaBrevo({ from, to, replyTo, cc, bcc, subject, html, text, metadata }) {
+  const apiKey = process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY;
+  if (!apiKey) {
+    return { skipped: true, reason: "BREVO_API_KEY not set." };
+  }
+
+  const fromHeader = deliveryFromAddress(from, {
+    fromAddress: process.env.BREVO_FROM_ADDRESS || process.env.EMAIL_FROM_ADDRESS || process.env.TRANSACTIONAL_FROM_ADDRESS,
+    fromName: process.env.BREVO_FROM_NAME || process.env.EMAIL_FROM_NAME || process.env.TRANSACTIONAL_FROM_NAME || "CL Apps",
+  });
+  const fromEmail = address(fromHeader);
+  const fromName = displayName(fromHeader);
+  const replyToEmail = address(replyTo);
+  const replyToName = displayName(replyTo);
+  const toRecipients = addressList(to).map(email => ({ email }));
+  const ccRecipients = addressList(cc).map(email => ({ email }));
+  const bccRecipients = addressList(bcc).map(email => ({ email }));
+
+  if (!fromEmail || !toRecipients.length) {
+    return { skipped: true, status: "failed", reason: "Brevo sender or recipient is missing." };
+  }
+
+  const emailRecordId = headerText(metadata?.emailRecordId);
+  const headers = emailRecordId ? {
+    "X-Mailin-custom": `emailRecordId=${emailRecordId}`,
+    "X-Cl-Email-Record-Id": emailRecordId,
+  } : undefined;
+  const payload = {
+    sender: { email: fromEmail, ...(fromName ? { name: fromName } : {}) },
+    to: toRecipients,
+    ...(ccRecipients.length ? { cc: ccRecipients } : {}),
+    ...(bccRecipients.length ? { bcc: bccRecipients } : {}),
+    ...(replyToEmail ? { replyTo: { email: replyToEmail, ...(replyToName ? { name: replyToName } : {}) } } : {}),
+    subject,
+    ...(html ? { htmlContent: html } : { textContent: text || "" }),
+    ...(headers ? { headers } : {}),
+    tags: ["customer-notification"],
+  };
+
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    signal: AbortSignal.timeout(20000),
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "api-key": apiKey,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const result = await response.json().catch(() => null);
+  if (response.status >= 500 || !result) {
+    return { skipped: true, status: "unknown", reason: "Brevo acceptance is unconfirmed. Check the provider before sending again." };
+  }
+
+  if (!response.ok || result.code) {
+    return {
+      skipped: true,
+      reason: result?.message || result?.code || `Brevo rejected the email (HTTP ${response.status}).`,
+    };
+  }
+
+  const providerMessageId = Array.isArray(result.messageIds) ? result.messageIds[0] : result.messageId;
+  if (!providerMessageId) {
+    return { skipped: true, status: "unknown", reason: "Brevo acceptance did not include a message ID. Check the provider before sending again." };
+  }
+
+  return { skipped: false, provider: "brevo", providerMessageId: String(providerMessageId).replace(/[<>]/g, "") };
+}
+
 async function sendViaMailtrap({ from, to, replyTo, cc, bcc, subject, html, text, metadata }) {
   const token = process.env.MAILTRAP_API_TOKEN || process.env.MAILTRAP_API_KEY;
   if (!token) {
@@ -576,6 +646,14 @@ export async function sendTransactionalEmail({ from, to, replyTo, cc, bcc, subje
     }
   }
 
+  if (selectedProvider === "brevo") {
+    try {
+      return await sendViaBrevo({ from, to, replyTo, cc, bcc, subject, html, text, metadata });
+    } catch {
+      return { skipped: true, status: "unknown", reason: "The connection to Brevo was interrupted; the email may have been accepted. Check provider logs before sending again." };
+    }
+  }
+
   if (selectedProvider === "mailtrap") {
     try {
       return await sendViaMailtrap({ from, to, replyTo, cc, bcc, subject, html, text, metadata });
@@ -597,7 +675,7 @@ export async function sendTransactionalEmail({ from, to, replyTo, cc, bcc, subje
     // fail loudly instead of silently guessing which provider was meant.
     return {
       skipped: true,
-      reason: `Unknown EMAIL_PROVIDER "${selectedProvider}" — expected "resend", "postmark", "mailtrap", "mailjet" or "smtp".`,
+      reason: `Unknown EMAIL_PROVIDER "${selectedProvider}" — expected "resend", "postmark", "brevo", "mailtrap", "mailjet" or "smtp".`,
     };
   }
 
