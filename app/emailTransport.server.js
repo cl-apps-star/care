@@ -445,8 +445,7 @@ async function sendViaBrevo({ from, to, replyTo, cc, bcc, subject, html, text, m
     ...(bccRecipients.length ? { bcc: bccRecipients } : {}),
     ...(replyToEmail ? { replyTo: { email: replyToEmail, ...(replyToName ? { name: replyToName } : {}) } } : {}),
     subject,
-    ...(html ? { htmlContent: html } : {}),
-    ...(text ? { textContent: text } : (!html ? { textContent: "" } : {})),
+    ...(html ? { htmlContent: html } : { textContent: text || "" }),
     ...(headers ? { headers } : {}),
     tags: ["customer-notification"],
   };
