@@ -403,6 +403,73 @@ async function sendViaPostmark({ from, to, replyTo, cc, bcc, subject, html, text
   };
 }
 
+async function sendViaMailtrap({ from, to, replyTo, cc, bcc, subject, html, text, metadata }) {
+  const token = process.env.MAILTRAP_API_TOKEN || process.env.MAILTRAP_API_KEY;
+  if (!token) {
+    return { skipped: true, reason: "MAILTRAP_API_TOKEN not set." };
+  }
+
+  const fromHeader = deliveryFromAddress(from, {
+    fromAddress: process.env.MAILTRAP_FROM_ADDRESS || process.env.EMAIL_FROM_ADDRESS || process.env.TRANSACTIONAL_FROM_ADDRESS,
+    fromName: process.env.MAILTRAP_FROM_NAME || process.env.EMAIL_FROM_NAME || process.env.TRANSACTIONAL_FROM_NAME || "CL Apps",
+  });
+  const fromEmail = address(fromHeader);
+  const fromName = displayName(fromHeader);
+  const replyToEmail = address(replyTo);
+  const replyToName = displayName(replyTo);
+  const toRecipients = addressList(to).map(email => ({ email }));
+  const ccRecipients = addressList(cc).map(email => ({ email }));
+  const bccRecipients = addressList(bcc).map(email => ({ email }));
+
+  if (!fromEmail || !toRecipients.length) {
+    return { skipped: true, status: "failed", reason: "Mailtrap sender or recipient is missing." };
+  }
+
+  const response = await fetch("https://send.api.mailtrap.io/api/send", {
+    method: "POST",
+    signal: AbortSignal.timeout(20000),
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "Api-Token": token,
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      from: { email: fromEmail, ...(fromName ? { name: fromName } : {}) },
+      to: toRecipients,
+      ...(ccRecipients.length ? { cc: ccRecipients } : {}),
+      ...(bccRecipients.length ? { bcc: bccRecipients } : {}),
+      ...(replyToEmail ? { reply_to: { email: replyToEmail, ...(replyToName ? { name: replyToName } : {}) } } : {}),
+      subject,
+      ...(html ? { html } : {}),
+      ...(text ? { text } : {}),
+      category: "customer-notification",
+      custom_variables: metadata || undefined,
+      headers: metadata?.emailRecordId ? { "X-CL-Email-Record-ID": headerText(metadata.emailRecordId) } : undefined,
+    }),
+  });
+
+  const result = await response.json().catch(() => null);
+  if (response.status >= 500 || !result) {
+    return { skipped: true, status: "unknown", reason: "Mailtrap acceptance is unconfirmed. Check the provider before sending again." };
+  }
+
+  if (!response.ok || result.success === false) {
+    const errors = Array.isArray(result?.errors) ? result.errors.join("; ") : "";
+    return {
+      skipped: true,
+      reason: result?.message || errors || `Mailtrap rejected the email (HTTP ${response.status}).`,
+    };
+  }
+
+  const providerMessageId = Array.isArray(result.message_ids) ? result.message_ids[0] : result.message_id;
+  if (!providerMessageId) {
+    return { skipped: true, status: "unknown", reason: "Mailtrap acceptance did not include a message ID. Check the provider before sending again." };
+  }
+
+  return { skipped: false, provider: "mailtrap", providerMessageId };
+}
+
 // Normalized result shape from any path:
 //   success -> { skipped: false, provider, providerMessageId }
 //   failure -> { skipped: true, reason }
@@ -425,12 +492,20 @@ export async function sendTransactionalEmail({ from, to, replyTo, cc, bcc, subje
     }
   }
 
+  if (selectedProvider === "mailtrap") {
+    try {
+      return await sendViaMailtrap({ from, to, replyTo, cc, bcc, subject, html, text, metadata });
+    } catch {
+      return { skipped: true, status: "unknown", reason: "The connection to Mailtrap was interrupted; the email may have been accepted. Check provider logs before sending again." };
+    }
+  }
+
   if (selectedProvider !== "resend") {
     // Unknown value in EMAIL_PROVIDER (typo, leftover from testing, etc) —
     // fail loudly instead of silently guessing which provider was meant.
     return {
       skipped: true,
-      reason: `Unknown EMAIL_PROVIDER "${selectedProvider}" — expected "resend", "postmark" or "smtp".`,
+      reason: `Unknown EMAIL_PROVIDER "${selectedProvider}" — expected "resend", "postmark", "mailtrap" or "smtp".`,
     };
   }
 
