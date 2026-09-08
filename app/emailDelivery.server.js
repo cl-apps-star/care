@@ -144,6 +144,10 @@ function firstString(...values) {
   return "";
 }
 
+function normaliseProviderMessageId(value) {
+  return firstString(value).replace(/^<+|>+$/g, "");
+}
+
 function eventDate(...values) {
   for (const value of values) {
     if (typeof value === "number" && Number.isFinite(value)) {
@@ -186,7 +190,7 @@ export function normaliseProviderEvent(event, providerHint = "") {
     if (!status || (event.RecordType === "SubscriptionChange" && !event.SuppressSending)) return null;
     return {
       provider: "postmark",
-      providerMessageId: firstString(event.MessageID),
+      providerMessageId: normaliseProviderMessageId(event.MessageID),
       recipient: normaliseRecipient(event.Recipient || event.Email),
       occurredAt: eventDate(event.DeliveredAt, event.BouncedAt, event.ChangedAt),
       type: String(event.RecordType),
@@ -206,7 +210,7 @@ export function normaliseProviderEvent(event, providerHint = "") {
     if (!status) return null;
     return {
       provider: "brevo",
-      providerMessageId: firstString(event["message-id"], event.messageId, event.message_id, event.uuid),
+      providerMessageId: normaliseProviderMessageId(event["message-id"], event.messageId, event.message_id, event.uuid),
       recipient: normaliseRecipient(event.email || event.recipient || event.to),
       occurredAt: eventDate(event.ts_event, event.ts_epoch, event.date, event.time),
       type,
@@ -226,7 +230,7 @@ export function normaliseProviderEvent(event, providerHint = "") {
     if (!status) return null;
     return {
       provider: "smtp2go",
-      providerMessageId: firstString(event["message-id"], event.message_id, event.messageId, event.email_id, event.id),
+      providerMessageId: normaliseProviderMessageId(event["message-id"], event.message_id, event.messageId, event.email_id, event.id),
       recipient: normaliseRecipient(event.recipient || event.email || event.to),
       occurredAt: eventDate(event.time, event.timestamp, event.date),
       type,
@@ -249,7 +253,7 @@ export function normaliseProviderEvent(event, providerHint = "") {
     if (!status) return null;
     return {
       provider: "mailersend",
-      providerMessageId: firstString(email.message_id, email.id, data.message_id, data.id, event.message_id),
+      providerMessageId: normaliseProviderMessageId(email.message_id, email.id, data.message_id, data.id, event.message_id),
       recipient: normaliseRecipient(recipient.email || data.email || event.email),
       occurredAt: eventDate(data.created_at, data.timestamp, event.created_at),
       type,
@@ -270,7 +274,7 @@ export function normaliseProviderEvent(event, providerHint = "") {
     if (!status) return null;
     return {
       provider: "mailtrap",
-      providerMessageId: firstString(event.message_id, event.messageId, event["message-id"], event.id),
+      providerMessageId: normaliseProviderMessageId(event.message_id, event.messageId, event["message-id"], event.id),
       recipient: normaliseRecipient(event.email || event.recipient || event.to),
       occurredAt: eventDate(event.timestamp, event.time, event.date),
       type,
@@ -290,7 +294,7 @@ export function normaliseProviderEvent(event, providerHint = "") {
     if (!status) return null;
     return {
       provider: "mailjet",
-      providerMessageId: firstString(event.Message_GUID, event.MessageUUID, event.MessageID, event.mj_message_id, event.id),
+      providerMessageId: normaliseProviderMessageId(event.Message_GUID, event.MessageUUID, event.MessageID, event.mj_message_id, event.id),
       recipient: normaliseRecipient(event.email || event.recipient || event.to),
       occurredAt: eventDate(event.time, event.timestamp, event.date),
       type,
