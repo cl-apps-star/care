@@ -192,6 +192,12 @@ function buildMimeMessage({ from, to, replyTo, cc, bcc, subject, html, text, met
   return { messageId, body: [...headers, "", quotedPrintable(html || text || ""), ""].join("\r\n") };
 }
 
+function smtpProviderMessageId(localMessageId, response) {
+  const cleaned = headerText(response).replace(/\s+/g, " ");
+  const match = cleaned.match(/\b(?:queued(?:\s+as)?|message[- ]?id|id)[:\s<]+([A-Za-z0-9._@+-]{6,})>?/i);
+  return match?.[1] || localMessageId.replace(/[<>]/g, "");
+}
+
 function smtpConfig() {
   const port = Number(process.env.SMTP_PORT || 587);
   const secure = String(process.env.SMTP_SECURE || "").toLowerCase() === "true" || port === 465;
@@ -289,12 +295,12 @@ async function sendViaSmtp({ from, to, replyTo, cc, bcc, subject, html, text, me
     await session.send(`MAIL FROM:<${envelopeFrom}>`);
     for (const recipient of recipients) await session.send(`RCPT TO:<${recipient}>`, [250, 251]);
     await session.send("DATA", [354]);
-    await session.send(`${body.replace(/^\./gm, "..")}\r\n.`);
+    const dataResponse = await session.send(`${body.replace(/^\./gm, "..")}\r\n.`);
     await session.send("QUIT", [221, 250]).catch(() => null);
+    return { skipped: false, provider: "smtp", providerMessageId: smtpProviderMessageId(messageId, dataResponse) };
   } finally {
     session.close();
   }
-  return { skipped: false, provider: "smtp", providerMessageId: messageId.replace(/[<>]/g, "") };
 }
 
 async function sendViaResend({ from, to, replyTo, cc, bcc, subject, html, text, metadata }) {
