@@ -116,6 +116,14 @@ function headerText(value) {
   return String(value || "").replace(/[\r\n]+/g, " ").trim();
 }
 
+function firstText(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+
 function foldHeader(name, value) {
   const line = `${name}: ${value}`;
   if (line.length <= 998) return line;
@@ -470,6 +478,82 @@ async function sendViaMailtrap({ from, to, replyTo, cc, bcc, subject, html, text
   return { skipped: false, provider: "mailtrap", providerMessageId };
 }
 
+async function sendViaMailjet({ from, to, replyTo, cc, bcc, subject, html, text, metadata }) {
+  const apiKey = process.env.MAILJET_API_KEY || process.env.MAILJET_API_KEY_PUBLIC;
+  const secretKey = process.env.MAILJET_SECRET_KEY || process.env.MAILJET_API_SECRET || process.env.MAILJET_API_KEY_PRIVATE;
+  if (!apiKey || !secretKey) {
+    return { skipped: true, reason: "MAILJET_API_KEY and MAILJET_SECRET_KEY are required." };
+  }
+
+  const fromHeader = deliveryFromAddress(from, {
+    fromAddress: process.env.MAILJET_FROM_ADDRESS || process.env.EMAIL_FROM_ADDRESS || process.env.TRANSACTIONAL_FROM_ADDRESS,
+    fromName: process.env.MAILJET_FROM_NAME || process.env.EMAIL_FROM_NAME || process.env.TRANSACTIONAL_FROM_NAME || "CL Apps",
+  });
+  const fromEmail = address(fromHeader);
+  const fromName = displayName(fromHeader);
+  const replyToEmail = address(replyTo);
+  const replyToName = displayName(replyTo);
+  const toRecipients = addressList(to).map(email => ({ Email: email }));
+  const ccRecipients = addressList(cc).map(email => ({ Email: email }));
+  const bccRecipients = addressList(bcc).map(email => ({ Email: email }));
+
+  if (!fromEmail || !toRecipients.length) {
+    return { skipped: true, status: "failed", reason: "Mailjet sender or recipient is missing." };
+  }
+
+  const emailRecordId = headerText(metadata?.emailRecordId);
+  const message = {
+    From: { Email: fromEmail, ...(fromName ? { Name: fromName } : {}) },
+    To: toRecipients,
+    ...(ccRecipients.length ? { Cc: ccRecipients } : {}),
+    ...(bccRecipients.length ? { Bcc: bccRecipients } : {}),
+    ...(replyToEmail ? { ReplyTo: { Email: replyToEmail, ...(replyToName ? { Name: replyToName } : {}) } } : {}),
+    Subject: subject,
+    ...(text ? { TextPart: text } : {}),
+    ...(html ? { HTMLPart: html } : {}),
+    ...(emailRecordId ? { CustomID: emailRecordId, EventPayload: JSON.stringify(metadata || {}) } : {}),
+    Headers: emailRecordId ? { "X-CL-Email-Record-ID": emailRecordId } : undefined,
+    TrackOpens: "disabled",
+    TrackClicks: "disabled",
+  };
+
+  const response = await fetch("https://api.mailjet.com/v3.1/send", {
+    method: "POST",
+    signal: AbortSignal.timeout(20000),
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: `Basic ${Buffer.from(`${apiKey}:${secretKey}`).toString("base64")}`,
+    },
+    body: JSON.stringify({ Messages: [message] }),
+  });
+
+  const result = await response.json().catch(() => null);
+  if (response.status >= 500 || !result) {
+    return { skipped: true, status: "unknown", reason: "Mailjet acceptance is unconfirmed. Check the provider before sending again." };
+  }
+
+  const sentMessage = Array.isArray(result.Messages) ? result.Messages[0] : null;
+  const providerMessage = sentMessage?.To?.[0] || sentMessage?.Cc?.[0] || sentMessage?.Bcc?.[0] || {};
+  const providerMessageId = firstText(providerMessage.MessageUUID, providerMessage.MessageID, providerMessage.MessageHref);
+  const status = String(sentMessage?.Status || "").toLowerCase();
+  if (!response.ok || (status && status !== "success")) {
+    const errors = Array.isArray(sentMessage?.Errors)
+      ? sentMessage.Errors.map(error => firstText(error.ErrorMessage, error.ErrorRelatedTo, error.StatusCode)).filter(Boolean).join("; ")
+      : "";
+    return {
+      skipped: true,
+      reason: errors || firstText(result.ErrorMessage, result.Message, `Mailjet rejected the email (HTTP ${response.status}).`),
+    };
+  }
+
+  if (!providerMessageId) {
+    return { skipped: true, status: "unknown", reason: "Mailjet acceptance did not include a message ID. Check the provider before sending again." };
+  }
+
+  return { skipped: false, provider: "mailjet", providerMessageId };
+}
+
 // Normalized result shape from any path:
 //   success -> { skipped: false, provider, providerMessageId }
 //   failure -> { skipped: true, reason }
@@ -500,12 +584,20 @@ export async function sendTransactionalEmail({ from, to, replyTo, cc, bcc, subje
     }
   }
 
+  if (selectedProvider === "mailjet") {
+    try {
+      return await sendViaMailjet({ from, to, replyTo, cc, bcc, subject, html, text, metadata });
+    } catch {
+      return { skipped: true, status: "unknown", reason: "The connection to Mailjet was interrupted; the email may have been accepted. Check provider logs before sending again." };
+    }
+  }
+
   if (selectedProvider !== "resend") {
     // Unknown value in EMAIL_PROVIDER (typo, leftover from testing, etc) —
     // fail loudly instead of silently guessing which provider was meant.
     return {
       skipped: true,
-      reason: `Unknown EMAIL_PROVIDER "${selectedProvider}" — expected "resend", "postmark", "mailtrap" or "smtp".`,
+      reason: `Unknown EMAIL_PROVIDER "${selectedProvider}" — expected "resend", "postmark", "mailtrap", "mailjet" or "smtp".`,
     };
   }
 

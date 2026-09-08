@@ -280,6 +280,26 @@ export function normaliseProviderEvent(event, providerHint = "") {
     };
   }
 
+  if (provider === "mailjet") {
+    const type = firstString(event.event, event.type, event.status).toLowerCase();
+    const status = {
+      sent: "delivered", delivered: "delivered", queued: "accepted",
+      bounce: "failed", blocked: "failed", blocked_bounce: "failed",
+      spam: "complained", unsub: "suppressed", unsubscribe: "suppressed", unsubscribed: "suppressed",
+    }[type];
+    if (!status) return null;
+    return {
+      provider: "mailjet",
+      providerMessageId: firstString(event.Message_GUID, event.MessageUUID, event.MessageID, event.mj_message_id, event.id),
+      recipient: normaliseRecipient(event.email || event.recipient || event.to),
+      occurredAt: eventDate(event.time, event.timestamp, event.date),
+      type,
+      status,
+      description: firstString(event.error, event.smtp_reply, event.comment, event.reason),
+      emailRecordId: eventRecordId(event.CustomID || event.Payload || event.metadata || event.headers || event["X-CL-Email-Record-ID"]),
+    };
+  }
+
   return null;
 }
 
