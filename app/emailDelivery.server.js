@@ -42,7 +42,7 @@ async function priorTerminalRecipient(shop, recipients) {
       email: { in: primaryRecipients },
       role: "to",
       status: { in: terminalStatuses },
-      message: { is: { shop } },
+      message: { is: { shop, providerMessageId: { not: null } } },
     },
     select: { email: true, status: true },
   });
