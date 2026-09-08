@@ -445,6 +445,7 @@ async function sendViaBrevo({ from, to, replyTo, cc, bcc, subject, html, text, m
     ...(bccRecipients.length ? { bcc: bccRecipients } : {}),
     ...(replyToEmail ? { replyTo: { email: replyToEmail, ...(replyToName ? { name: replyToName } : {}) } } : {}),
     subject,
+    // Brevo static API accepts one message body type per request. Use SMTP if a Brevo route needs multipart HTML+text.
     ...(html ? { htmlContent: html } : { textContent: text || "" }),
     ...(headers ? { headers } : {}),
     tags: ["customer-notification"],
