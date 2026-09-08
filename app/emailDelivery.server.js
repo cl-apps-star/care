@@ -73,6 +73,7 @@ export async function sendRecordedEmail(email) {
     // A callback can arrive before the send response. Never overwrite it.
     await db.$transaction(async tx => {
       await tx.emailMessage.update({ where: { id: message.id }, data: {
+        provider: result.provider || provider,
         ...(result.providerMessageId ? { providerMessageId: result.providerMessageId } : {}),
       } });
       await tx.emailMessage.updateMany({ where: { id: message.id, status: "sending" }, data: { status, reason } });
@@ -93,7 +94,13 @@ export async function sendRecordedEmail(email) {
 export function authorisedEmailWebhook(request) {
   const secret = process.env.EMAIL_WEBHOOK_SECRET;
   if (!secret || secret.length < 32) return false;
-  const supplied = request.headers.get("X-Email-Webhook-Secret") || "";
+  let querySecret = "";
+  try {
+    querySecret = new URL(request.url).searchParams.get("secret") || "";
+  } catch {
+    querySecret = "";
+  }
+  const supplied = request.headers.get("X-Email-Webhook-Secret") || querySecret;
   const a = Buffer.from(supplied); const b = Buffer.from(secret);
   return a.length === b.length && timingSafeEqual(a, b);
 }
@@ -107,41 +114,169 @@ function aggregate(recipients) {
   return "accepted";
 }
 
-export async function applyPostmarkEvent(event) {
-  const statuses = { Delivery: "delivered", Bounce: "failed", SpamComplaint: "complained", SubscriptionChange: "suppressed" };
-  const status = statuses[event?.RecordType];
-  if (!status) return { ignored: true };
-  if (event.RecordType === "SubscriptionChange" && !event.SuppressSending) return { ignored: true };
-  const providerMessageId = event.MessageID;
-  const recipient = normaliseRecipient(event.Recipient || event.Email);
-  const occurredAt = new Date(event.DeliveredAt || event.BouncedAt || event.ChangedAt);
-  if (typeof providerMessageId !== "string" || !recipient || !Number.isFinite(occurredAt.getTime())) {
+function firstString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+
+function eventDate(...values) {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const milliseconds = value > 10_000_000_000 ? value : value * 1000;
+      const date = new Date(milliseconds);
+      if (Number.isFinite(date.getTime())) return date;
+    }
+    if (typeof value === "string" && value.trim()) {
+      const date = new Date(value);
+      if (Number.isFinite(date.getTime())) return date;
+      if (/^\d+$/.test(value.trim())) {
+        const numeric = Number(value);
+        const milliseconds = numeric > 10_000_000_000 ? numeric : numeric * 1000;
+        const numericDate = new Date(milliseconds);
+        if (Number.isFinite(numericDate.getTime())) return numericDate;
+      }
+    }
+  }
+  return new Date();
+}
+
+function eventRecordId(value) {
+  if (!value) return "";
+  if (typeof value === "object") {
+    return firstString(value.emailRecordId, value.email_record_id, value["X-CL-Email-Record-ID"]);
+  }
+  const text = String(value);
+  try {
+    const parsed = JSON.parse(text);
+    return eventRecordId(parsed);
+  } catch {
+    return text.match(/emailRecordId[=:"'\s]+([A-Za-z0-9_-]+)/)?.[1] || "";
+  }
+}
+
+export function normaliseProviderEvent(event, providerHint = "") {
+  const provider = String(providerHint || event?.provider || event?.Provider || "").trim().toLowerCase();
+  if (provider === "postmark" || event?.RecordType) {
+    const status = { Delivery: "delivered", Bounce: "failed", SpamComplaint: "complained", SubscriptionChange: "suppressed" }[event?.RecordType];
+    if (!status || (event.RecordType === "SubscriptionChange" && !event.SuppressSending)) return null;
+    return {
+      provider: "postmark",
+      providerMessageId: firstString(event.MessageID),
+      recipient: normaliseRecipient(event.Recipient || event.Email),
+      occurredAt: eventDate(event.DeliveredAt, event.BouncedAt, event.ChangedAt),
+      type: String(event.RecordType),
+      status,
+      description: firstString(event.Description, event.Type),
+      emailRecordId: eventRecordId(event.Metadata),
+    };
+  }
+
+  if (provider === "brevo") {
+    const type = firstString(event.event, event.Event, event.status).toLowerCase();
+    const status = {
+      request: "accepted", sent: "accepted", delivered: "delivered", deferred: "unknown",
+      hard_bounce: "failed", soft_bounce: "failed", blocked: "suppressed",
+      spam: "complained", invalid_email: "failed", error: "failed", unsubscribed: "suppressed",
+    }[type];
+    if (!status) return null;
+    return {
+      provider: "brevo",
+      providerMessageId: firstString(event["message-id"], event.messageId, event.message_id, event.uuid),
+      recipient: normaliseRecipient(event.email || event.recipient || event.to),
+      occurredAt: eventDate(event.ts_event, event.ts_epoch, event.date, event.time),
+      type,
+      status,
+      description: firstString(event.reason, event.description, event.subject),
+      emailRecordId: eventRecordId(event.metadata || event.Metadata || event["X-Mailin-custom"] || event["X-CL-Email-Record-ID"]),
+    };
+  }
+
+  if (provider === "smtp2go") {
+    const type = firstString(event.event, event.type, event.status).toLowerCase();
+    const status = {
+      processed: "accepted", sent: "accepted", delivered: "delivered", deferred: "unknown",
+      bounce: "failed", bounced: "failed", rejected: "failed", reject: "failed",
+      spam: "complained", spam_complaint: "complained", unsubscribe: "suppressed", unsubscribed: "suppressed",
+    }[type];
+    if (!status) return null;
+    return {
+      provider: "smtp2go",
+      providerMessageId: firstString(event["message-id"], event.message_id, event.messageId, event.email_id, event.id),
+      recipient: normaliseRecipient(event.recipient || event.email || event.to),
+      occurredAt: eventDate(event.time, event.timestamp, event.date),
+      type,
+      status,
+      description: firstString(event.reason, event.description, event.error, event.bounce),
+      emailRecordId: eventRecordId(event.metadata || event.headers || event["X-CL-Email-Record-ID"]),
+    };
+  }
+
+  if (provider === "mailersend") {
+    const data = event.data || {};
+    const email = data.email || {};
+    const recipient = data.recipient || email.recipient || {};
+    const type = firstString(event.type, data.type, data.event).replace(/^activity\./, "").toLowerCase();
+    const status = {
+      queued: "accepted", sent: "accepted", delivered: "delivered", soft_bounced: "failed",
+      hard_bounced: "failed", bounced: "failed", rejected: "failed", spam_complaint: "complained",
+      unsubscribed: "suppressed",
+    }[type];
+    if (!status) return null;
+    return {
+      provider: "mailersend",
+      providerMessageId: firstString(email.message_id, email.id, data.message_id, data.id, event.message_id),
+      recipient: normaliseRecipient(recipient.email || data.email || event.email),
+      occurredAt: eventDate(data.created_at, data.timestamp, event.created_at),
+      type,
+      status,
+      description: firstString(data.reason, data.description, email.subject),
+      emailRecordId: eventRecordId(data.metadata || email.metadata || event.metadata),
+    };
+  }
+
+  return null;
+}
+
+function shouldApplyRecipientStatus(current, status, occurredAt) {
+  if (terminal.has(status)) return true;
+  if (terminal.has(current.status)) return false;
+  if (current.status === "delivered" && status === "accepted") return false;
+  if (current.eventAt && occurredAt < current.eventAt) return false;
+  return true;
+}
+
+export async function applyProviderEvent(event, providerHint = "") {
+  const normalised = normaliseProviderEvent(event, providerHint);
+  if (!normalised) return { ignored: true };
+  const { provider, providerMessageId, recipient, occurredAt, type, status, description, emailRecordId } = normalised;
+  if (typeof providerMessageId !== "string" || !providerMessageId || !recipient || !Number.isFinite(occurredAt.getTime())) {
     return { invalid: true };
   }
-  const id = event.Metadata?.emailRecordId;
   const message = await db.emailMessage.findFirst({ where: {
-    provider: "postmark",
-    OR: [{ providerMessageId }, ...(typeof id === "string" ? [{ id, providerMessageId: null }] : [])],
+    OR: [
+      { provider, providerMessageId },
+      ...(emailRecordId ? [{ id: emailRecordId }] : []),
+    ],
   }, include: { recipients: true } });
   // Old messages and redacted records are acknowledged, never recreated.
   if (!message || !message.recipients.some(r => r.email === recipient)) return { ignored: true };
   const eventKey = createHash("sha256").update(JSON.stringify([
-    "postmark", providerMessageId, recipient, event.RecordType, occurredAt.toISOString(),
+    provider, providerMessageId, recipient, type, occurredAt.toISOString(),
   ])).digest("hex");
   try {
     await db.$transaction(async tx => {
-      await tx.emailDeliveryEvent.create({ data: { eventKey, messageId: message.id, recipient, type: event.RecordType, occurredAt } });
+      await tx.emailDeliveryEvent.create({ data: { eventKey, messageId: message.id, recipient, type, occurredAt } });
       const current = await tx.emailRecipient.findUnique({ where: { messageId_email: { messageId: message.id, email: recipient } } });
-      // Failure is terminal for this attempt; a late delivery must not clear it.
-      if (!terminal.has(current.status) || terminal.has(status)) {
-        if (!current.eventAt || occurredAt >= current.eventAt || terminal.has(status)) {
-          await tx.emailRecipient.update({ where: { id: current.id }, data: { status, eventAt: occurredAt } });
-        }
+      if (shouldApplyRecipientStatus(current, status, occurredAt)) {
+        await tx.emailRecipient.update({ where: { id: current.id }, data: { status, eventAt: occurredAt } });
       }
       const recipients = await tx.emailRecipient.findMany({ where: { messageId: message.id } });
       await tx.emailMessage.update({ where: { id: message.id }, data: {
-        providerMessageId, status: aggregate(recipients),
-        ...(terminal.has(status) && current.role === "to" ? { reason: String(event.Description || event.Type || "The provider reported a delivery problem.").slice(0, 500) } : {}),
+        provider, providerMessageId, status: aggregate(recipients),
+        ...(terminal.has(status) && current.role === "to" ? { reason: String(description || "The provider reported a delivery problem.").slice(0, 500) } : {}),
       } });
     });
   } catch (error) {
@@ -149,6 +284,10 @@ export async function applyPostmarkEvent(event) {
     throw error;
   }
   return { processed: true };
+}
+
+export async function applyPostmarkEvent(event) {
+  return applyProviderEvent(event, "postmark");
 }
 
 export async function listEmailMessages(shop, resourceId) {
