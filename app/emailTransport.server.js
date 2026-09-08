@@ -161,7 +161,10 @@ function buildMimeMessage({ from, to, replyTo, cc, bcc, subject, html, text, met
     foldHeader("Message-ID", messageId),
     foldHeader("Date", new Date().toUTCString()),
     foldHeader("MIME-Version", "1.0"),
-    ...(metadata?.emailRecordId ? [foldHeader("X-CL-Email-Record-ID", headerText(metadata.emailRecordId))] : []),
+    ...(metadata?.emailRecordId ? [
+      foldHeader("X-CL-Email-Record-ID", headerText(metadata.emailRecordId)),
+      foldHeader("X-Mailin-custom", `emailRecordId=${headerText(metadata.emailRecordId)}`),
+    ] : []),
   ];
 
   if (html && text) {
