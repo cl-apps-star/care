@@ -35,7 +35,7 @@ function stripInlineTags(value) {
   return value.replace(/<\/?[a-z][^>]*>/gi, "");
 }
 
-function buildPlainTextEmail({ brandName, metaLine, greeting, paragraphs, ctaLabel, ctaUrl }) {
+function buildPlainTextEmail({ brandName, metaLine, greeting, paragraphs, ctaLabel, ctaUrl, trustLine }) {
   const lines = [
     brandName.toUpperCase(),
     metaLine || null,
@@ -47,6 +47,10 @@ function buildPlainTextEmail({ brandName, metaLine, greeting, paragraphs, ctaLab
 
   if (ctaUrl) {
     lines.push(`${ctaLabel || "View update"}:`, ctaUrl);
+  }
+
+  if (trustLine) {
+    lines.push("", stripInlineTags(trustLine));
   }
 
   return lines
@@ -75,8 +79,10 @@ function renderCareEmail({
   paragraphs,
   ctaLabel,
   ctaUrl,
+  trustLine,
 }) {
   const brand = brandBlock(merchant);
+  const footer = trustLine || `Sent by ${brand.name} through CL Apps. Reply to this email for help with this request.`;
 
   const bodyRows = paragraphs
     .map(
@@ -166,8 +172,8 @@ function renderCareEmail({
 
               <tr>
                 <td align="center" style="padding-top:40px;">
-                  <div style="font-family:Helvetica,Arial,sans-serif; font-size:10px; color:#b3b3ac;">
-                    Sent by ${brand.name} via Care.
+                  <div style="font-family:Helvetica,Arial,sans-serif; font-size:10.5px; line-height:1.6; color:#9a9a92;">
+                    ${footer}
                   </div>
                 </td>
               </tr>
@@ -187,6 +193,7 @@ function renderCareEmail({
     paragraphs,
     ctaLabel,
     ctaUrl,
+    trustLine: footer,
   });
 
   return { html, text, fromName: brand.name };
@@ -222,6 +229,14 @@ function greetingFor(customerName) {
   return firstName ? `${firstName},` : "Hello,";
 }
 
+function careTrustLine({ merchant, orderName, requestType = "care request" }) {
+  const brand = brandBlock(merchant);
+  const orderText = orderName
+    ? `order ${orderName}`
+    : "your item";
+  return `Sent by ${brand.name} through CL Apps because ${orderText} has an active ${requestType}. Reply to this email for help with this request.`;
+}
+
 export async function sendCaseReceivedEmail({ careCase, merchant, updateId, trackingUrl }) {
   const piece = careCase.productTitle || "your piece";
   const { html, text, fromName } = renderCareEmail({
@@ -235,13 +250,14 @@ export async function sendCaseReceivedEmail({ careCase, merchant, updateId, trac
     ],
     ctaLabel: "Track your request",
     ctaUrl: trackingUrl,
+    trustLine: careTrustLine({ merchant, orderName: careCase.shopifyOrderName, requestType: `${careCase.serviceName.toLowerCase()} request` }),
   });
   return send({
     context: { shop: careCase.shop || merchant?.shop, kind: "sendCaseReceivedEmail", resourceId: careCase.id, updateId, dedupeKey: updateId ? `${updateId}:sendCaseReceivedEmail` : undefined },
     fromName,
     merchant,
     to: careCase.customerEmail,
-    subject: `We've received your care request`,
+    subject: `${fromName}: we've received your ${careCase.serviceName.toLowerCase()} request`,
     html,
     text,
   });
@@ -277,13 +293,14 @@ export async function sendCareRequestInviteEmail({
     ],
     ctaLabel: "Start your request",
     ctaUrl: portalUrl,
+    trustLine: careTrustLine({ merchant, orderName, requestType: "care option" }),
   });
   return send({
     context: { shop: merchant?.shop, kind: "sendCareRequestInviteEmail", resourceId: inviteId || orderName || null },
     fromName,
     merchant,
     to: customerEmail,
-    subject: `Need a repair or return on ${piece}?`,
+    subject: `${fromName}: care support for ${piece}`,
     html,
     text,
   });
@@ -384,13 +401,14 @@ export async function sendQuoteEmail({ careCase, merchant, updateId, trackingUrl
     paragraphs,
     ctaLabel: "Review your quote",
     ctaUrl: trackingUrl,
+    trustLine: careTrustLine({ merchant, orderName: careCase.shopifyOrderName, requestType: `${careCase.serviceName.toLowerCase()} request` }),
   });
   return send({
     context: { shop: careCase.shop || merchant?.shop, kind: "sendQuoteEmail", resourceId: careCase.id, updateId, dedupeKey: updateId ? `${updateId}:sendQuoteEmail` : undefined },
     fromName,
     merchant,
     to: careCase.customerEmail,
-    subject: `Your quote is ready`,
+    subject: `${fromName}: your quote is ready`,
     html,
     text,
   });
@@ -412,13 +430,14 @@ export async function sendStageUpdateEmail({ careCase, merchant, updateId, track
     paragraphs,
     ctaLabel: "View progress",
     ctaUrl: trackingUrl,
+    trustLine: careTrustLine({ merchant, orderName: careCase.shopifyOrderName, requestType: `${careCase.serviceName.toLowerCase()} request` }),
   });
   return send({
     context: { shop: careCase.shop || merchant?.shop, kind: "sendStageUpdateEmail", resourceId: careCase.id, updateId, dedupeKey: updateId ? `${updateId}:sendStageUpdateEmail` : undefined },
     fromName,
     merchant,
     to: careCase.customerEmail,
-    subject: `Update on your care request: ${label}`,
+    subject: `${fromName}: update on your care request`,
     html,
     text,
   });
@@ -436,13 +455,14 @@ export async function sendReadyToReturnEmail({ careCase, merchant, updateId, tra
     ],
     ctaLabel: "View details",
     ctaUrl: trackingUrl,
+    trustLine: careTrustLine({ merchant, orderName: careCase.shopifyOrderName, requestType: `${careCase.serviceName.toLowerCase()} request` }),
   });
   return send({
     context: { shop: careCase.shop || merchant?.shop, kind: "sendReadyToReturnEmail", resourceId: careCase.id, updateId, dedupeKey: updateId ? `${updateId}:sendReadyToReturnEmail` : undefined },
     fromName,
     merchant,
     to: careCase.customerEmail,
-    subject: `Your piece is ready`,
+    subject: `${fromName}: your piece is ready`,
     html,
     text,
   });
