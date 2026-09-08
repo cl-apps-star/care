@@ -16,6 +16,13 @@ import { sendTransactionalEmail } from "./emailProviders.server";
 // that's blank.
 const FALLBACK_REPLY_TO = "hello@cl-apps.net";
 
+function serviceSenderName(value) {
+  const source = String(value || "CL Apps").replace(/[<>"\r\n]/g, "").trim() || "CL Apps";
+  if (source.toLowerCase() === "cl apps") return "CL Apps";
+  if (source.toLowerCase().includes(" via cl apps")) return source;
+  return `${source} via CL Apps`;
+}
+
 function brandBlock(merchant) {
   const name = (merchant?.brandName || "Our studio").trim();
   const accent = merchant?.accentColor || "#8a7758";
@@ -197,7 +204,7 @@ function renderCareEmail({
 async function send({ fromName, to, subject, html, text, merchant, context }) {
   const result = await sendTransactionalEmail({
     context,
-    from: `${fromName} <care@cl-apps.net>`,
+    from: `${serviceSenderName(fromName)} <care@cl-apps.net>`,
     to,
     // Reply to THIS merchant's own support address if they've set one in
     // Branding — a customer hitting "reply" should reach the store they
