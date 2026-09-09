@@ -50,7 +50,7 @@ export const action = async ({ request, params }) => {
   const invite = await getCareInviteByToken(params.token);
   if (!invite) throw new Response("Not found", { status: 404 });
   const formData = await request.formData();
-  return runRequestAction({ shop: invite.merchant.shop, formData });
+  return runRequestAction({ shop: invite.merchant.shop, formData, requestUrl: request.url });
 };
 
 export { default } from "./care.request";

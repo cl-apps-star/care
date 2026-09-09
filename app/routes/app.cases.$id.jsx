@@ -12,6 +12,7 @@ import {
 import { STAGES, stageLabel, statusTone, nextStage, needsMerchantAction } from "../care-stages";
 import { sendQuoteEmail, sendStageUpdateEmail, sendReadyToReturnEmail } from "../email.server";
 import styles from "../styles/care-admin.module.css";
+import { publicOrigin } from "../publicOrigin.server";
 
 // Same tinted-card pattern used on the dashboard (app._index.jsx's
 // SECTION_TINTS/TintedSection) — duplicated here rather than shared from a
@@ -104,7 +105,7 @@ export const action = async ({ request, params }) => {
     const merchant = await getOrCreateMerchantProfile(session.shop);
     const formData = await request.formData();
     const intent = formData.get("intent");
-    const appUrl = process.env.SHOPIFY_APP_URL || "";
+    const appUrl = publicOrigin(request.url);
 
     const careCase = await getCaseById(params.id, merchant.id);
     if (!careCase) throw new Response("Not found", { status: 404 });

@@ -17,6 +17,7 @@ import { listCatalogue, createCareCase } from "./care.server";
 import { sendCaseReceivedEmail, sendNewCaseAlertEmail } from "./email.server";
 import { findOrderForCustomer } from "./shopify-orders.server";
 import { checkAndIncrementCaseCount } from "./plan.server";
+import { publicOrigin } from "./publicOrigin.server";
 
 export async function loadRequestPageData({ shop, actionUrl, prefillEmail, prefillOrder, prefillName, prefillProductTitle }) {
   if (!shop) {
@@ -46,7 +47,7 @@ export async function loadRequestPageData({ shop, actionUrl, prefillEmail, prefi
   return { merchant, catalogue, shop, prefill, actionUrl };
 }
 
-export async function runRequestAction({ shop, formData }) {
+export async function runRequestAction({ shop, formData, requestUrl }) {
   const merchant = await prisma.merchantProfile.findUnique({ where: { shop } });
   if (!merchant) throw new Response("Not found", { status: 404 });
 
@@ -146,7 +147,7 @@ export async function runRequestAction({ shop, formData }) {
       photos,
     });
 
-    const appUrl = process.env.SHOPIFY_APP_URL || "";
+    const appUrl = publicOrigin(requestUrl);
     const trackingUrl = `${appUrl}/care/${careCase.token}`;
     await sendCaseReceivedEmail({ careCase, merchant, trackingUrl });
 

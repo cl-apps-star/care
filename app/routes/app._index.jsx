@@ -4,6 +4,7 @@ import { authenticate } from "../shopify.server";
 import { getOrCreateMerchantProfile, listCasesForMerchant, listCatalogue, createCareCase } from "../care.server";
 import { sendCaseReceivedEmail } from "../email.server";
 import { needsMerchantAction } from "../care-stages";
+import { publicOrigin } from "../publicOrigin.server";
 import styles from "../styles/care-admin.module.css";
 
 // Home is now just the overview: getting-started checklist + explainer.
@@ -27,7 +28,7 @@ export const action = async ({ request }) => {
   const merchant = await getOrCreateMerchantProfile(session.shop);
   const formData = await request.formData();
   const intent = formData.get("intent");
-  const appUrl = process.env.SHOPIFY_APP_URL || "";
+  const appUrl = publicOrigin(request.url);
 
   // Only action this page needs — "try it" for step 3 of the checklist.
   // Everything else (sending a real customer their request link, advancing

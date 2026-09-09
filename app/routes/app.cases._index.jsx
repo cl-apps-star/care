@@ -21,6 +21,7 @@ import {
 import { getRecentCoaKits } from "../coa-lookup.server";
 import { getPlanSummary } from "../plan.server";
 import { FREE_CASE_LIMIT } from "../planConstants";
+import { publicOrigin } from "../publicOrigin.server";
 import styles from "../styles/care-admin.module.css";
 
 // Split out of the old app._index.jsx (which is now just the getting-
@@ -38,7 +39,7 @@ export const loader = async ({ request }) => {
     getRecentCoaKits(session.shop),
     getPlanSummary(session.shop),
   ]);
-  const appUrl = process.env.SHOPIFY_APP_URL || "";
+  const appUrl = publicOrigin(request.url);
   const requestLink = `${appUrl}/care/request?shop=${encodeURIComponent(session.shop)}`;
   return { merchant, cases, catalogue, requestLink, recentKits, planSummary };
 };
@@ -48,7 +49,7 @@ export const action = async ({ request }) => {
   const merchant = await getOrCreateMerchantProfile(session.shop);
   const formData = await request.formData();
   const intent = formData.get("intent");
-  const appUrl = process.env.SHOPIFY_APP_URL || "";
+  const appUrl = publicOrigin(request.url);
 
   if (intent === "create_test_case") {
     const careCase = await createCareCase(merchant.id, {

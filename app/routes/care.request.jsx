@@ -30,7 +30,7 @@ export const action = async ({ request }) => {
   const url = new URL(request.url);
   const shop = url.searchParams.get("shop");
   const formData = await request.formData();
-  return runRequestAction({ shop, formData });
+  return runRequestAction({ shop, formData, requestUrl: request.url });
 };
 
 function Shell({ brand, children }) {

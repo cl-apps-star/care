@@ -3,6 +3,7 @@ import prisma from "../db.server";
 import { getCaseByToken, approveQuote, declineQuote } from "../care.server";
 import { stageLabel } from "../care-stages";
 import { sendStageUpdateEmail, sendQuoteApprovedAlertEmail } from "../email.server";
+import { publicOrigin } from "../publicOrigin.server";
 
 // Public, unauthenticated route — the token is the access control,
 // same pattern as In the Making's /journey/:token.
@@ -17,7 +18,7 @@ export const action = async ({ request, params }) => {
   if (!careCase) throw new Response("Not found", { status: 404 });
   const formData = await request.formData();
   const intent = formData.get("intent");
-  const appUrl = process.env.SHOPIFY_APP_URL || "";
+  const appUrl = publicOrigin(request.url);
   const trackingUrl = `${appUrl}/care/${careCase.token}`;
 
   if (intent === "approve_quote" && careCase.status === "quote_sent") {
