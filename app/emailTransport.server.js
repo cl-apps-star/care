@@ -89,6 +89,17 @@ function serviceFromName(fromName, serviceName) {
   return `${source} via ${service}`;
 }
 
+// Keep every CL Apps Postmark send on the one authenticated identity being
+// reviewed by Yahoo and Microsoft. Other providers can still use their own
+// provider-specific or generic sender overrides.
+const DEFAULT_POSTMARK_FROM_ADDRESS = "updates@notify.cl-apps.net";
+
+function postmarkFromAddress(from) {
+  return deliveryFromAddress(from, {
+    fromAddress: process.env.POSTMARK_FROM_ADDRESS || DEFAULT_POSTMARK_FROM_ADDRESS,
+  });
+}
+
 function deliveryFromAddress(from, options = {}) {
   const override = address(
     options.fromAddress ||
@@ -367,7 +378,7 @@ async function sendViaPostmark({ from, to, replyTo, cc, bcc, subject, html, text
       "X-Postmark-Server-Token": process.env.POSTMARK_API_KEY,
     },
     body: JSON.stringify({
-      From: deliveryFromAddress(from),
+      From: postmarkFromAddress(from),
       To: Array.isArray(to) ? to.join(",") : to,
       ReplyTo: replyTo,
       ...(cc ? { Cc: Array.isArray(cc) ? cc.join(",") : cc } : {}),

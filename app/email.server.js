@@ -2,11 +2,8 @@ import db from "./db.server";
 import { stageLabel } from "./care-stages";
 import { sendTransactionalEmail } from "./emailProviders.server";
 
-// Same domain / provider as Reveal and In the Making - keep sender
-// addresses distinct per app so replies route sensibly.
-// Reveal:        certificates@cl-apps.net
-// In the Making: updates@cl-apps.net
-// Care:          care@cl-apps.net
+// Customer mail uses the suite-wide transactional identity. Replies still
+// route to the merchant's support address (or the CL Apps fallback) below.
 //
 // FALLBACK_REPLY_TO is only used when a merchant hasn't set a support
 // email in Branding yet — it must never be the only reply-to address in
@@ -204,7 +201,7 @@ function renderCareEmail({
 async function send({ fromName, to, subject, html, text, merchant, context }) {
   const result = await sendTransactionalEmail({
     context,
-    from: `${serviceSenderName(fromName)} <care@cl-apps.net>`,
+    from: `${serviceSenderName(fromName)} <updates@notify.cl-apps.net>`,
     to,
     // Reply to THIS merchant's own support address if they've set one in
     // Branding — a customer hitting "reply" should reach the store they
