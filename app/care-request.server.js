@@ -44,7 +44,10 @@ export async function loadRequestPageData({ shop, actionUrl, prefillEmail, prefi
     };
   }
 
-  return { merchant, catalogue, shop, prefill, actionUrl };
+  const brandFields = ["shop", "brandName", "primaryColor", "accentColor", "logoUrl", "supportEmail"];
+  const publicMerchant = Object.fromEntries(brandFields.map(key => [key, merchant[key]]));
+  const publicCatalogue = catalogue.map(({ id, name }) => ({ id, name }));
+  return { merchant: publicMerchant, catalogue: publicCatalogue, shop, prefill, actionUrl };
 }
 
 export async function runRequestAction({ shop, formData, requestUrl }) {

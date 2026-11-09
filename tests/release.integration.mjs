@@ -6,6 +6,7 @@ import { customerEmailEnabled, submittedSendingPreference } from "../app/sending
 import { isLocalCarePreview } from "../app/localPreview.server.js";
 import { sendCaseReceivedEmail } from "../app/email.server.js";
 import { quoteFingerprint } from "../app/quoteFingerprint.server.js";
+import { loadRequestPageData } from "../app/care-request.server.js";
 
 test.after(async () => { await db.$disconnect(); });
 test("new Care installations default customer email off", async () => {
@@ -42,6 +43,15 @@ test("Care keeps its request, assessment, quote and customer approval workflow",
   await approveQuote(record.id);
   const approved = await db.careCase.findUnique({ where: { id: record.id } });
   assert.equal(approved.status, "approved"); assert.equal(approved.shopifyDraftOrderId, null);
+});
+test("the public Care request page omits billing, usage and sending preferences", async () => {
+  const merchant = await getOrCreateMerchantProfile("existing-care.myshopify.com");
+  await db.serviceCatalogueItem.create({ data: { merchantId: merchant.id, name: "Repair assessment", pricingType: "quote", position: 0 } });
+  const result = await loadRequestPageData({ shop: merchant.shop, actionUrl: "/care/request" });
+  assert.deepEqual(Object.keys(result.merchant).sort(), ["accentColor", "brandName", "logoUrl", "primaryColor", "shop", "supportEmail"]);
+  assert.equal(result.merchant.brandName, "Revised Studio");
+  assert.equal(JSON.stringify(result).includes("legacy-charge"), false);
+  assert.deepEqual(Object.keys(result.catalogue[0]).sort(), ["id", "name"]);
 });
 test("the Care preview never sends external email", async () => {
   const merchant = await getOrCreateMerchantProfile("new-care.myshopify.com");
