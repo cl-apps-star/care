@@ -1,3 +1,5 @@
+import customerRequestStyles from "../styles/customer-request.css?url";
+export const links = () => [{ rel: "stylesheet", href: customerRequestStyles }];
 import { Form, useLoaderData, useActionData, useNavigation } from "react-router";
 import { loadRequestPageData, runRequestAction } from "../care-request.server";
 
@@ -37,76 +39,6 @@ function Shell({ brand, children }) {
   const accent = brand?.accentColor || "#8a7758";
   return (
     <div style={{ "--accent": accent }}>
-      <style>{`
-        .care-req-wrap {
-          font-family: Georgia, 'Times New Roman', serif;
-          max-width: 480px;
-          margin: 0 auto;
-          padding: 64px 24px 64px;
-          color: #232320;
-          background: #fffdfa;
-        }
-        .care-req-eyebrow {
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-          font-size: 11px;
-          letter-spacing: 0.18em;
-          text-transform: uppercase;
-          color: var(--accent);
-          text-align: center;
-          margin-bottom: 22px;
-        }
-        .care-req-wrap h1 { font-weight: normal; font-size: 24px; text-align: center; margin: 0 0 10px; }
-        .care-req-wrap > p.care-req-intro {
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-          color: #7d7a72; font-size: 13.5px; line-height: 1.6;
-          text-align: center; margin: 0 0 40px;
-        }
-        .care-field { display: block; margin-bottom: 22px; }
-        .care-field-label {
-          display: block;
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-          font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
-          color: #a39d90; margin-bottom: 8px;
-        }
-        .care-field input, .care-field select, .care-field textarea {
-          display: block; width: 100%; box-sizing: border-box;
-          font-family: Georgia, 'Times New Roman', serif;
-          font-size: 15px; color: #232320;
-          padding: 10px 2px; border: none; border-bottom: 1px solid #e4e0d8;
-          background: transparent;
-        }
-        .care-field input:focus, .care-field select:focus, .care-field textarea:focus {
-          outline: none; border-bottom-color: var(--accent);
-        }
-        .care-field textarea { min-height: 96px; font-family: Georgia, 'Times New Roman', serif; resize: vertical; }
-        .care-req-note {
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-          font-size: 12.5px; color: #7d7a72; margin: -12px 0 22px;
-        }
-        .care-req-error {
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-          font-size: 13px; color: #a4463a; margin: -6px 0 20px;
-        }
-        .care-req-btn {
-          display: block; width: 100%; box-sizing: border-box;
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-          font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase;
-          padding: 14px 22px; border: 1px solid var(--accent);
-          color: #fff; background: var(--accent); text-align: center;
-          cursor: pointer; margin-top: 10px;
-        }
-        .care-req-btn:disabled { opacity: 0.6; cursor: default; }
-        .care-req-link {
-          display: inline-block; margin-top: 18px;
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-          font-size: 12.5px; color: var(--accent); text-decoration: none;
-          border-bottom: 1px solid var(--accent); padding-bottom: 1px;
-        }
-        .care-req-found {
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-          font-size: 12.5px; color: #7d7a72; margin: -8px 0 22px;
-        }
-      `}</style>
       <div className="care-req-wrap">
         <div className="care-req-eyebrow">{brand?.brandName || "CL Apps"}</div>
         {children}

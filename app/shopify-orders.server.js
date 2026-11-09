@@ -6,7 +6,7 @@ import prisma from "./db.server";
 // yet, the order can't be found, or the email doesn't match — the caller
 // (care.request.jsx) lets the customer continue with manual entry either way.
 
-const API_VERSION = "2025-10";
+const API_VERSION = "2026-07";
 
 function numericIdFromGid(gid) {
   return typeof gid === "string" ? gid.split("/").pop() : null;

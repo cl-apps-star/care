@@ -1,6 +1,8 @@
 import db from "./db.server";
 import { stageLabel } from "./care-stages";
 import { sendTransactionalEmail } from "./emailProviders.server";
+import { customerEmailEnabled } from "./sendingPreference";
+import { isLocalCarePreview } from "./localPreview.server";
 
 // Customer mail uses the suite-wide transactional identity. Replies still
 // route to the merchant's support address (or the CL Apps fallback) below.
@@ -199,6 +201,11 @@ function renderCareEmail({
 }
 
 async function send({ fromName, to, subject, html, text, merchant, context }) {
+  if (isLocalCarePreview()) return { skipped: true, reason: "Email is disabled in local preview." };
+  // Merchant alerts remain operational; customer mail uses the saved preference.
+  if (!context.kind.includes("Alert") && !customerEmailEnabled(merchant)) {
+    return { skipped: true, reason: "Customer email is off. Review Branding & setup to activate sending." };
+  }
   const result = await sendTransactionalEmail({
     context,
     from: `${serviceSenderName(fromName)} <updates@notify.cl-apps.net>`,

@@ -13,6 +13,7 @@ import { STAGES, stageLabel, statusTone, nextStage, needsMerchantAction } from "
 import { sendQuoteEmail, sendStageUpdateEmail, sendReadyToReturnEmail } from "../email.server";
 import styles from "../styles/care-admin.module.css";
 import { publicOrigin } from "../publicOrigin.server";
+import { displayCareDate } from "../displayDate";
 
 // Same tinted-card pattern used on the dashboard (app._index.jsx's
 // SECTION_TINTS/TintedSection) — duplicated here rather than shared from a
@@ -97,7 +98,7 @@ export const loader = async ({ request, params }) => {
     const merchant = await getOrCreateMerchantProfile(session.shop);
     const careCase = await getCaseById(params.id, merchant.id);
     if (!careCase) throw new Response("Not found", { status: 404 });
-    return { merchant, careCase };
+    return { merchant, careCase, trackingUrl: `${publicOrigin(request.url)}/care/${careCase.token}` };
 };
 
 export const action = async ({ request, params }) => {
@@ -172,7 +173,7 @@ function parsePhotos(photosJson) {
 }
 
 export default function CaseDetail() {
-    const { careCase } = useLoaderData();
+    const { careCase, trackingUrl } = useLoaderData();
     const fetcher = useFetcher();
     const photos = parsePhotos(careCase.photos);
 
@@ -198,6 +199,7 @@ export default function CaseDetail() {
                 <h1>{careCase.productTitle || careCase.serviceName}</h1>
                 <p className={styles.lede}>{careCase.serviceName}{careCase.shopifyOrderName ? ` · ${careCase.shopifyOrderName}` : ""}</p>
               </div>
+              <a className="suite-secondary" href={trackingUrl} target="_blank" rel="noreferrer">Open customer page ↗</a>
             </header>
                 {/* One glance, top of page, answers "what's going on and is
                     there anything I need to do" — the tone (color) and the
@@ -337,7 +339,7 @@ export default function CaseDetail() {
                         {careCase.updates.map((u) => (
                       <s-box key={u.id} padding="tight">
                                     <s-text weight={u.status ? "bold" : "regular"}>
-                                      {u.status ? stageLabel(u.status) : "Note"} - {new Date(u.createdAt).toLocaleString()}
+                                      {u.status ? stageLabel(u.status) : "Note"} · {displayCareDate(u.createdAt, true)}
                                       {!u.visibleToCustomer ? " (internal)" : ""}
                                     </s-text>
                         {u.note && <s-text tone="subdued">{u.note}</s-text>

@@ -14,6 +14,10 @@ export default async function handleRequest(
     reactRouterContext,
   ) {
     addDocumentResponseHeaders(request, responseHeaders);
+    responseHeaders.set("Cache-Control", "no-store");
+    responseHeaders.set("Referrer-Policy", "no-referrer");
+    responseHeaders.set("X-Content-Type-Options", "nosniff");
+    responseHeaders.set("X-Robots-Tag", "noindex, nofollow");
     const userAgent = request.headers.get("user-agent");
     const callbackName = isbot(userAgent ?? "") ? "onAllReady" : "onShellReady";
 

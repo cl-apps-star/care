@@ -33,12 +33,13 @@ if (host === "localhost") {
 
 export default defineConfig({
     server: {
+          ...(process.env.CARE_LOCAL_PREVIEW === "true" ? { host: "127.0.0.1" } : {}),
           allowedHosts: [host],
           cors: {
                   preflightContinue: true,
           },
           port: Number(process.env.PORT || 3000),
-          hmr: hmrConfig,
+          hmr: process.env.CARE_LOCAL_PREVIEW === "true" ? { protocol: "ws", host: "127.0.0.1", port: Number(process.env.PORT || 3202), clientPort: Number(process.env.PORT || 3202) } : hmrConfig,
           fs: {
                   allow: ["app", "node_modules"],
           },

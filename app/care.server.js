@@ -1,12 +1,13 @@
 import prisma from "./db.server";
 import { DEFAULT_CARE_STAGES, nextStage, isTerminal } from "./care-stages";
+import { quoteFingerprint } from "./quoteFingerprint.server";
 
 // ---- Merchant profile / branding ----------------------------------------
 
 export async function getOrCreateMerchantProfile(shop) {
     let profile = await prisma.merchantProfile.findUnique({ where: { shop } });
     if (!profile) {
-          profile = await prisma.merchantProfile.create({ data: { shop } });
+          profile = await prisma.merchantProfile.create({ data: { shop, automaticEmail: false } });
     }
     return profile;
 }
@@ -83,7 +84,7 @@ export async function getCaseByToken(token) {
     return prisma.careCase.findUnique({
           where: { token },
           include: {
-                  updates: { orderBy: { createdAt: "asc" } },
+                  updates: { where: { visibleToCustomer: true }, orderBy: { createdAt: "asc" } },
                   catalogueItem: true,
                   merchant: true,
           },
@@ -194,12 +195,17 @@ export async function sendQuote(caseId) {
     });
 }
 
-export async function approveQuote(caseId) {
-    return advanceCase(caseId, {
-          status: "approved",
-          note: "Customer approved the quote.",
-          notifyCustomer: true,
-    });
+export async function approveQuote(caseId, expectedFingerprint) {
+  return prisma.$transaction(async tx => {
+    const current = await tx.careCase.findUnique({ where: { id: caseId } });
+    if (!current || current.status !== "quote_sent" || (expectedFingerprint && quoteFingerprint(current) !== expectedFingerprint)) {
+      throw new Error("This quote has changed. Reload and review it before approving.");
+    }
+    const saved = await tx.careCase.updateMany({ where: { id: caseId, status: "quote_sent", updatedAt: current.updatedAt, quoteLabourCost: current.quoteLabourCost, quotePartsCost: current.quotePartsCost, quoteShippingCost: current.quoteShippingCost, quoteTaxPercent: current.quoteTaxPercent, quoteTotal: current.quoteTotal, quoteCurrency: current.quoteCurrency, quoteNote: current.quoteNote }, data: { status: "approved", quoteApprovedAt: new Date() } });
+    if (saved.count !== 1) throw new Error("This quote has changed. Reload and review it before approving.");
+    const update = await tx.careUpdate.create({ data: { caseId, status: "approved", note: "Customer approved the quote.", visibleToCustomer: true, customerNotified: false } });
+    return { case: await tx.careCase.findUnique({ where: { id: caseId } }), update };
+  });
 }
 
 export async function declineQuote(caseId) {

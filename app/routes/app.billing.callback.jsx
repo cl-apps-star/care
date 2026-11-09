@@ -35,6 +35,7 @@ export const loader = async ({ request }) => {
       },
       create: {
         shop: session.shop,
+        automaticEmail: false,
         plan: "studio",
         planStatus: "active",
         shopifyChargeId: subscription?.id || null,

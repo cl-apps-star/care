@@ -1,3 +1,11 @@
 .cache
 build
 node_modules
+.react-router
+.local
+output
+.env.*
+*.db
+*.db-journal
+.git
+.env

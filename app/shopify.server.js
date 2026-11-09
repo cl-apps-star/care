@@ -8,6 +8,7 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 import { STUDIO_PLAN, STUDIO_PLAN_PRICE } from "./planConstants";
+import { isLocalCarePreview, carePreviewShopify } from "./localPreview.server";
 
 // Re-exported for back-compat with any file still importing this from here
 // — new code should import from ./planConstants directly, since this file
@@ -15,10 +16,10 @@ import { STUDIO_PLAN, STUDIO_PLAN_PRICE } from "./planConstants";
 // loader/action gets flagged by React Router's client bundle check.
 export { STUDIO_PLAN };
 
-const shopify = shopifyApp({
+const shopify = isLocalCarePreview() ? carePreviewShopify() : shopifyApp({
     apiKey: process.env.SHOPIFY_API_KEY,
     apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
-    apiVersion: ApiVersion.October25,
+    apiVersion: ApiVersion.July26,
     scopes: process.env.SCOPES?.split(","),
     appUrl: process.env.SHOPIFY_APP_URL || "",
     authPathPrefix: "/auth",
@@ -46,7 +47,7 @@ const shopify = shopifyApp({
 });
 
 export default shopify;
-export const apiVersion = ApiVersion.October25;
+export const apiVersion = ApiVersion.July26;
 export const addDocumentResponseHeaders = shopify.addDocumentResponseHeaders;
 export const authenticate = shopify.authenticate;
 export const unauthenticated = shopify.unauthenticated;

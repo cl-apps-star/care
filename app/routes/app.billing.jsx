@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useFetcher, useLoaderData, useNavigate } from "react-router";
+import { useFetcher, useLoaderData, useNavigate, useRouteLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
@@ -59,9 +59,18 @@ export const action = async ({ request }) => {
 };
 
 export default function BillingPage() {
+  const { preview } = useRouteLoaderData("routes/app");
+  return preview ? <BillingView shopify={{ toast: { show() {} } }} /> : <ConnectedBilling />;
+}
+
+function ConnectedBilling() {
+  const shopify = useAppBridge();
+  return <BillingView shopify={shopify} />;
+}
+
+function BillingView({ shopify }) {
   const { hasActivePayment, planSummary, shop } = useLoaderData();
   const fetcher = useFetcher();
-  const shopify = useAppBridge();
   const navigate = useNavigate();
 
   const data = fetcher.data || { hasActivePayment, planSummary };

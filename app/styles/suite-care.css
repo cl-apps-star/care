@@ -1,0 +1,27 @@
+/* Preserve Care's functionality and merchant-controlled customer branding.
+   Only the merchant workspace inherits the current CL Apps desk. */
+.care-suite { --s-page-background: #fafbf9; }
+.care-suite s-page { display: block; --s-page-background: #fafbf9; }
+.care-suite-content { min-height: 65vh; }
+.care-suite h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: 34px; line-height: 1.2; letter-spacing: -.03em; }
+.care-suite [class*="shell"] { max-width: 1180px; color: #26312e; }
+.care-suite [class*="lede"] { color: #6b7671; font-size: 14px; }
+.care-suite [class*="primaryLink"], .care-suite [class*="planCard"] button { background: #294d43; color: #fff; border-radius: 5px; font-weight: 550; box-shadow: none; }
+.care-suite [class*="secondaryLink"] { border-radius: 5px; border-color: #d7dfd9; color: #344039; }
+.care-suite [class*="stepAction"] { color: #294d43; }
+.care-suite [class*="stepNumber"] { color: #294d43; background: #eaf1eb; }
+.care-suite [class*="card"], .care-suite [class*="formPanel"], .care-suite [class*="stat"] { box-shadow: none; border-color: #e1e3e6; }
+.care-suite [class*="currentPlan"] { background: #294d43; box-shadow: none; border-radius: 12px; }
+.care-suite [class*="textField"] input { border-radius: 5px; border-color: #ccd5ce; }
+.care-suite [class*="textField"] input:focus { border-color: #80a99a; box-shadow: 0 0 0 2px #80a99a30; }
+.care-suite [class*="step"]:hover { border-color: #bdcdbf; background: #f8faf7; }
+.care-suite .suite-mark { font-family: Georgia, serif; }
+.care-suite .care-suite-content h1 { font-family: Georgia, serif; font-size: 34px; font-weight: 400; }
+.care-suite .care-suite-content h2 { font-size: 17px; }
+.care-recent-cases { list-style: none; margin: 0; padding: 0; }
+.care-recent-cases li { display: flex; justify-content: space-between; align-items: center; gap: 15px; padding: 18px 0; border-top: 1px solid #e7ece6; }
+.care-recent-cases a { text-decoration: none; }
+.care-recent-cases strong, .care-recent-cases small { display: block; }
+.care-recent-cases strong { color: #294d43; font-size: 13px; font-weight: 500; }
+.care-recent-cases small { color: #78817c; font-size: 11px; margin-top: 4px; }
+@media (max-width: 550px) { .care-suite h1 { font-size: 29px; } }

@@ -8,12 +8,14 @@ No separate Care account, external login, or app-specific credentials are requir
 
 1. Open **Branding & setup** and save a brand name, colours, and a support email. The preview updates on the same page.
 2. Open **Services & pricing** and add a service such as “General repair”.
-3. Return to **Home** and choose **Create a demo case**. This creates a safe sample care case and sends the customer-facing confirmation to the authenticated admin user's email.
+3. Return to **Home** and choose **Create a demo case**. This creates a safe sample care case and its customer preview. No email is sent by demo creation.
 4. Open **Cases**, then open the demo case to view its details and copy the private customer tracking link.
 5. Move the case to **Assessment**, enter one or more quote amounts, and choose **Save & send quote**.
 6. Open the private customer tracking link. Confirm the quote breakdown, then choose **Approve quote** or **Decline quote**.
 7. Return to the case in Shopify Admin and continue moving it through the remaining care stages.
 8. Open **Billing** to view the free allowance and paid Studio plan. Choosing the paid plan opens Shopify's own subscription approval screen; no payment is collected inside Care.
+
+New merchants start with customer email off. Review **Branding & setup** before enabling it; pre-existing merchants retain their saved or legacy sending behaviour. There is no requirement to install another CL Apps application.
 
 ## Public customer request test
 

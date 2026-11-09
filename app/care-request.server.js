@@ -79,8 +79,9 @@ export async function runRequestAction({ shop, formData, requestUrl }) {
 
     let serviceName = "General enquiry";
     if (catalogueItemId) {
-      const item = await prisma.serviceCatalogueItem.findUnique({ where: { id: catalogueItemId } });
-      if (item) serviceName = item.name;
+      const item = await prisma.serviceCatalogueItem.findFirst({ where: { id: catalogueItemId, merchantId: merchant.id, active: true } });
+      if (!item) return { step: "details", orderNumber, email, formError: "Choose a service offered by this merchant." };
+      serviceName = item.name;
     }
 
     let shopifyOrderId = null;
@@ -89,27 +90,25 @@ export async function runRequestAction({ shop, formData, requestUrl }) {
     let productTitle = String(formData.get("productTitle") || "").trim() || null;
     let productImageUrl = null;
 
-    const lineItemsJson = formData.get("lineItemsJson");
     const selectedIndex = formData.get("selectedLineItem");
-    if (lineItemsJson && selectedIndex !== null && selectedIndex !== "") {
-      try {
-        const lineItems = JSON.parse(String(lineItemsJson));
-        const chosen = lineItems[Number(selectedIndex)];
-        if (chosen) {
-          productTitle = chosen.title;
-          shopifyProductId = chosen.shopifyProductId;
-          productImageUrl = chosen.imageUrl || null;
-        }
-      } catch {
-        // fall through to manually-entered productTitle
+    // Reverify order ownership on submission; hidden JSON is presentation only.
+    if (orderNumber) {
+      const verified = await findOrderForCustomer({ shop, orderNumber, email });
+      if (verified.found) {
+        shopifyOrderId = verified.shopifyOrderId;
+        shopifyOrderName = verified.shopifyOrderName;
+        const index = Number(selectedIndex);
+        const chosen = selectedIndex !== null && selectedIndex !== "" && Number.isInteger(index) ? verified.lineItems[index] : null;
+        if (chosen) { productTitle = chosen.title; shopifyProductId = chosen.shopifyProductId; productImageUrl = chosen.imageUrl || null; }
       }
     }
-    if (formData.get("shopifyOrderId")) shopifyOrderId = String(formData.get("shopifyOrderId"));
-    if (formData.get("shopifyOrderName")) shopifyOrderName = String(formData.get("shopifyOrderName"));
 
     let photos = null;
     const photoFile = formData.get("photo");
     if (photoFile && typeof photoFile === "object" && photoFile.size > 0) {
+      if (photoFile.size > 5000000 || !["image/jpeg", "image/png", "image/webp"].includes(photoFile.type)) {
+        return { step: "details", orderNumber, email, formError: "Choose a JPEG, PNG or WebP photograph up to 5 MB." };
+      }
       const buffer = Buffer.from(await photoFile.arrayBuffer());
       photos = [`data:${photoFile.type};base64,${buffer.toString("base64")}`];
     }

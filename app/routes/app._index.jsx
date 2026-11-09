@@ -2,8 +2,7 @@ import { Link, useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { getOrCreateMerchantProfile, listCasesForMerchant, listCatalogue, createCareCase } from "../care.server";
-import { sendCaseReceivedEmail } from "../email.server";
-import { needsMerchantAction } from "../care-stages";
+import { needsMerchantAction, stageLabel } from "../care-stages";
 import { publicOrigin } from "../publicOrigin.server";
 import styles from "../styles/care-admin.module.css";
 
@@ -36,15 +35,15 @@ export const action = async ({ request }) => {
   if (intent === "create_test_case") {
     const careCase = await createCareCase(merchant.id, {
       customerName: "Demo Customer",
-      customerEmail: session.email || "candicersalter@gmail.com",
+      customerEmail: "preview@example.com",
       shopifyOrderName: "#DEMO-" + Math.floor(Math.random() * 9000 + 1000),
       productTitle: "Sample Piece",
       serviceName: "General repair",
       issueDescription: "This is a demo case — safe to ignore or delete.",
     });
     const trackingUrl = `${appUrl}/care/${careCase.token}`;
-    await sendCaseReceivedEmail({ careCase, merchant, trackingUrl });
-    return { ok: true };
+    // A demo is a preview only. Never send an email from this action.
+    return { ok: true, trackingUrl };
   }
 
   return { ok: false };
@@ -83,6 +82,13 @@ function GetStartedSection({ merchant, catalogue, cases, onCreateDemoCase, creat
   const hasCatalogue = catalogue.length > 0;
   const hasCase = cases.length > 0;
   const allDone = hasBranding && hasCatalogue && hasCase;
+
+  if (allDone) return (
+    <section className={styles.card}>
+      <div className={styles.cardHeader}><div><p className={styles.eyebrow}>Your care desk</p><h2>Recent care cases</h2></div><Link to="/app/cases">View all →</Link></div>
+      <ul className="care-recent-cases">{cases.slice(0, 5).map(careCase => <li key={careCase.id}><Link to={`/app/cases/${careCase.id}`}><strong>{careCase.productTitle || careCase.serviceName}</strong><small>{careCase.customerName} · {careCase.serviceName}</small></Link><span className="suite-badge">{stageLabel(careCase.status)}</span></li>)}</ul>
+    </section>
+  );
 
   return (
     <section className={styles.card}>
@@ -135,6 +141,7 @@ export default function Index() {
   return (
     <s-page heading={ready ? "Care" : "Set up Care"} inlineSize="large">
       <div className={styles.shell}>
+        {fetcher.data?.trackingUrl && <div className="suite-notice" role="status">Your test care case is ready. <a href={fetcher.data.trackingUrl} target="_blank" rel="noreferrer">Open the customer preview ↗</a>. No email was sent.</div>}
         <header className={styles.hero}>
           <div>
             <p className={styles.eyebrow}>Customer care</p>

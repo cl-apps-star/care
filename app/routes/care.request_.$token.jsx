@@ -54,3 +54,5 @@ export const action = async ({ request, params }) => {
 };
 
 export { default } from "./care.request";
+
+export { links } from "./care.request";

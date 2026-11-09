@@ -41,6 +41,8 @@ model MerchantProfile {
   primaryColor String? @default("#1a1a1a")
   accentColor  String? @default("#8a7758")
   supportEmail String?
+  // Existing rows remain null (legacy sending); new installs explicitly start off.
+  automaticEmail Boolean?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

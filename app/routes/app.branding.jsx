@@ -4,6 +4,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { getOrCreateMerchantProfile, updateMerchantProfile } from "../care.server";
 import styles from "../styles/care-admin.module.css";
+import { submittedSendingPreference } from "../sendingPreference";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
@@ -20,6 +21,7 @@ export const action = async ({ request }) => {
     primaryColor: formData.get("primaryColor") || undefined,
     accentColor: formData.get("accentColor") || undefined,
     supportEmail: formData.get("supportEmail") || null,
+    ...submittedSendingPreference(formData),
   });
   return { ok: true };
 };
@@ -63,6 +65,7 @@ export default function Branding() {
               }}
             >
               <div className={styles.formGrid}>
+                <input type="hidden" name="emailPreferenceReviewed" value="1" />
                 <label className={styles.textField}>
                   <span>Brand or studio name</span>
                   <input name="brandName" value={preview.brandName} onChange={updatePreview("brandName")} />
@@ -85,8 +88,10 @@ export default function Branding() {
                   <span>Customer contact email <small>optional</small></span>
                   <input name="supportEmail" type="email" value={preview.supportEmail} onChange={updatePreview("supportEmail")} placeholder="hello@yourstudio.com" />
                 </label>
+                <label className="suite-check"><input type="checkbox" name="automaticEmail" defaultChecked={merchant.automaticEmail !== false} />Send customer emails when requests, quotes and progress change</label>
+                <p className="suite-muted">Review customer emails before activating sending. New installations start with sending off; existing merchants keep their previous behaviour.</p>
                 <div className={styles.formActions}>
-                  <s-button type="submit" loading={isSaving || undefined}>{isSaving ? "Saving…" : "Save branding"}</s-button>
+                  <button className="suite-button" type="submit" disabled={isSaving}>{isSaving ? "Saving…" : "Save branding"}</button>
                   {justSaved ? <span className={styles.saved}>Saved</span> : null}
                 </div>
               </div>
